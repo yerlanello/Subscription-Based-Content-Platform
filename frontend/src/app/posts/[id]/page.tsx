@@ -8,10 +8,10 @@ import { formatDistanceToNow } from "date-fns";
 import { ru } from "date-fns/locale";
 import { Heart, Lock, MessageCircle, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useState, use } from "react";
+import { useState } from "react";
 
-export default function PostPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function PostPage({ params }: { params: { id: string } }) {
+  const { id } = params;
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [comment, setComment] = useState("");

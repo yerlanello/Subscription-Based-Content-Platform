@@ -7,14 +7,13 @@ import { useAuth } from "@/hooks/useAuth";
 import { PostCard } from "@/components/post/PostCard";
 import { formatPrice } from "@/lib/auth";
 import { UserCheck, Heart } from "lucide-react";
-import { use } from "react";
 
 export default function CreatorProfilePage({
   params,
 }: {
-  params: Promise<{ username: string }>;
+  params: { username: string };
 }) {
-  const { username } = use(params);
+  const { username } = params;
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
