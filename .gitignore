@@ -1,0 +1,18 @@
+# Go
+backend/.env
+backend/tmp/
+
+# Node
+frontend/.env.local
+frontend/node_modules/
+frontend/.next/
+
+# Flutter
+mobile/.dart_tool/
+mobile/build/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+
+# General
+.DS_Store
+*.log
