@@ -8,13 +8,21 @@ import { formatDistanceToNow } from "date-fns";
 import { ru } from "date-fns/locale";
 import { Heart, Lock, MessageCircle, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 export default function PostPage({ params }: { params: { id: string } }) {
   const { id } = params;
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const isLockedHint = searchParams.get("locked") === "1";
   const queryClient = useQueryClient();
   const [comment, setComment] = useState("");
+
+  useEffect(() => {
+    if (!authLoading && !user) router.push("/register");
+  }, [user, authLoading, router]);
 
   const { data: post, isLoading, error } = useQuery({
     queryKey: ["post", id],
@@ -46,22 +54,47 @@ export default function PostPage({ params }: { params: { id: string } }) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["comments", id] }),
   });
 
-  if (isLoading) {
+  // Мгновенный показ если знаем что пост платный (передаётся через ?locked=1)
+  if (isLockedHint && isLoading) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-8">
-        <div className="card h-64 animate-pulse bg-gray-100" />
+      <div className="mx-auto max-w-3xl px-4 py-8 animate-fade-in">
+        <div className="card flex flex-col items-center gap-4 py-20 text-center">
+          <Lock size={40} className="text-brand-400" />
+          <h2 className="text-xl font-semibold">Контент только для подписчиков</h2>
+          <p className="text-gray-500">Оформите подписку на автора чтобы читать этот пост</p>
+        </div>
       </div>
     );
   }
 
-  const axiosError = error as { response?: { status?: number } } | null;
-  if (axiosError?.response?.status === 402) {
+  if (isLoading) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-8">
+        <div className="card p-6 space-y-4">
+          <div className="skeleton h-4 w-24" />
+          <div className="skeleton h-8 w-3/4" />
+          <div className="skeleton h-4 w-full" />
+          <div className="skeleton h-4 w-5/6" />
+          <div className="skeleton h-4 w-4/6" />
+        </div>
+      </div>
+    );
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const status = (error as any)?.response?.status;
+  if (status === 402 || status === 403) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-8">
         <div className="card flex flex-col items-center gap-4 py-20 text-center">
-          <Lock size={40} className="text-gray-400" />
+          <Lock size={40} className="text-brand-400" />
           <h2 className="text-xl font-semibold">Контент только для подписчиков</h2>
           <p className="text-gray-500">Оформите подписку на автора чтобы читать этот пост</p>
+          {post?.creator?.username && (
+            <Link href={`/${post.creator.username}`} className="btn-primary">
+              Перейти к автору
+            </Link>
+          )}
         </div>
       </div>
     );
@@ -113,14 +146,19 @@ export default function PostPage({ params }: { params: { id: string } }) {
         {/* Attachments */}
         {post.attachments && post.attachments.length > 0 && (
           <div className="mt-6 space-y-3">
-            {post.attachments.map((a) => (
-              <div key={a.id}>
-                {a.mime_type?.startsWith("image/") && (
+            {post.attachments.map((a) => {
+              const mime = a.mime_type ?? "";
+              if (mime.startsWith("image/"))
+                return (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={a.url} alt="" className="rounded-lg max-h-[500px] object-contain" />
-                )}
-              </div>
-            ))}
+                  <img key={a.id} src={a.url} alt="" className="rounded-lg max-h-[500px] w-full object-contain" />
+                );
+              if (mime.startsWith("video/"))
+                return <video key={a.id} src={a.url} controls className="w-full rounded-lg max-h-[500px]" />;
+              if (mime.startsWith("audio/"))
+                return <audio key={a.id} src={a.url} controls className="w-full" />;
+              return null;
+            })}
           </div>
         )}
 

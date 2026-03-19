@@ -6,7 +6,9 @@ import { CreatorPage, Post } from "@/lib/types";
 import { useAuth } from "@/hooks/useAuth";
 import { PostCard } from "@/components/post/PostCard";
 import { formatPrice } from "@/lib/auth";
-import { UserCheck, Heart } from "lucide-react";
+import { UserCheck, Heart, CreditCard, Lock } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 export default function CreatorProfilePage({
   params,
@@ -14,8 +16,15 @@ export default function CreatorProfilePage({
   params: { username: string };
 }) {
   const { username } = params;
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
+  const router = useRouter();
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!authLoading && !user) router.push("/register");
+  }, [user, authLoading, router]);
+
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   const { data: creator, isLoading } = useQuery({
     queryKey: ["creator", username],
@@ -67,17 +76,19 @@ export default function CreatorProfilePage({
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
-      {/* Cover */}
-      <div className="relative mb-16 h-48 overflow-hidden rounded-xl bg-gradient-to-r from-brand-500 to-purple-600">
-        {creator.profile.cover_url && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={creator.profile.cover_url}
-            alt="cover"
-            className="h-full w-full object-cover"
-          />
-        )}
-        {/* Avatar */}
+      {/* Cover + Avatar */}
+      <div className="relative mb-16">
+        <div className="h-48 overflow-hidden rounded-xl bg-gradient-to-r from-brand-500 to-purple-600">
+          {creator.profile.cover_url && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={creator.profile.cover_url}
+              alt="cover"
+              className="h-full w-full object-cover"
+            />
+          )}
+        </div>
+        {/* Avatar — вне overflow контейнера */}
         <div className="absolute -bottom-12 left-6">
           {creator.user.avatar_url ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -111,21 +122,24 @@ export default function CreatorProfilePage({
 
         {!isOwnProfile && user && (
           <div className="flex flex-col gap-2 sm:items-end">
-            {/* Subscribe */}
-            <button
-              onClick={() => subscribeMutation.mutate()}
-              disabled={subscribeMutation.isPending}
-              className={`btn min-w-[160px] ${
-                creator.is_subscribed ? "btn-outline" : "btn-primary"
-              }`}
-            >
-              <UserCheck size={16} />
-              {creator.is_subscribed
-                ? "Отписаться"
-                : price === 0
-                ? "Подписаться бесплатно"
-                : `Подписаться · ${formatPrice(price)}`}
-            </button>
+            {creator.is_subscribed ? (
+              <button
+                onClick={() => subscribeMutation.mutate()}
+                disabled={subscribeMutation.isPending}
+                className="btn-outline min-w-[160px]"
+              >
+                <UserCheck size={16} />
+                Отписаться
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowPaymentModal(true)}
+                className="btn-primary min-w-[160px]"
+              >
+                <CreditCard size={16} />
+                {price === 0 ? "Подписаться бесплатно" : `Подписаться · ${formatPrice(price)}`}
+              </button>
+            )}
 
             {/* Follow */}
             <button
@@ -140,7 +154,6 @@ export default function CreatorProfilePage({
               {creator.is_following ? "Отписан от уведомлений" : "Следить"}
             </button>
 
-            {/* Subscription description */}
             {creator.profile.subscription_description && (
               <p className="mt-1 max-w-xs text-right text-xs text-gray-500">
                 {creator.profile.subscription_description}
@@ -149,6 +162,35 @@ export default function CreatorProfilePage({
           </div>
         )}
       </div>
+
+      {/* Payment Modal */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="card w-full max-w-md p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Оформить подписку</h2>
+              <button onClick={() => setShowPaymentModal(false)} className="btn-ghost p-1 text-gray-400">✕</button>
+            </div>
+            <div className="mb-6 rounded-xl bg-gray-50 p-4 text-center">
+              <p className="text-2xl font-bold text-brand-600">{formatPrice(price)}</p>
+              <p className="text-sm text-gray-500">в месяц</p>
+              {creator.profile.subscription_description && (
+                <p className="mt-2 text-sm text-gray-600">{creator.profile.subscription_description}</p>
+              )}
+            </div>
+            <div className="flex items-center gap-3 rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4">
+              <Lock size={20} className="shrink-0 text-gray-400" />
+              <div>
+                <p className="text-sm font-medium text-gray-700">Оплата пока недоступна</p>
+                <p className="text-xs text-gray-400">Система оплаты находится в разработке. Скоро появится возможность оплаты картой.</p>
+              </div>
+            </div>
+            <button onClick={() => setShowPaymentModal(false)} className="btn-outline mt-4 w-full">
+              Закрыть
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Posts */}
       <h2 className="mb-4 text-lg font-semibold">Посты</h2>

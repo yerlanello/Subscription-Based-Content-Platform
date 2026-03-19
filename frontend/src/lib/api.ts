@@ -96,6 +96,10 @@ export const usersApi = {
   me: () => api.get("/users/me"),
   updateMe: (data: { avatar_url?: string; bio?: string }) =>
     api.put("/users/me", data),
+  uploadAvatar: (formData: FormData) =>
+    api.post("/users/me/avatar", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    }),
   getByUsername: (username: string) => api.get(`/users/${username}`),
   mySubscriptions: () => api.get("/users/me/subscriptions"),
 };
@@ -128,6 +132,15 @@ export const creatorsApi = {
     api.get(`/creators/${username}/posts`, { params }),
 };
 
+// --- Notifications ---
+export const notificationsApi = {
+  list: () => api.get("/notifications"),
+  markAllRead: () => api.post("/notifications/read-all"),
+  markRead: (id: string) => api.post(`/notifications/${id}/read`),
+  delete: (id: string) => api.delete(`/notifications/${id}`),
+  deleteAll: () => api.delete("/notifications"),
+};
+
 // --- Posts ---
 export const postsApi = {
   feed: (params?: { limit?: number; offset?: number }) =>
@@ -144,7 +157,14 @@ export const postsApi = {
     data: { title?: string; content?: string; is_free?: boolean }
   ) => api.put(`/posts/${id}`, data),
   publish: (id: string) => api.post(`/posts/${id}/publish`),
+  unpublish: (id: string) => api.post(`/posts/${id}/unpublish`),
   delete: (id: string) => api.delete(`/posts/${id}`),
+  uploadAttachment: (id: string, formData: FormData) =>
+    api.post(`/posts/${id}/attachments`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    }),
+  deleteAttachment: (postId: string, attachmentId: string) =>
+    api.delete(`/posts/${postId}/attachments/${attachmentId}`),
   like: (id: string) => api.post(`/posts/${id}/like`),
   unlike: (id: string) => api.delete(`/posts/${id}/like`),
   getComments: (id: string) => api.get(`/posts/${id}/comments`),

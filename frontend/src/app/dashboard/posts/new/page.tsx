@@ -4,9 +4,12 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { postsApi } from "@/lib/api";
+import { PostAttachment } from "@/lib/types";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { useQueryClient } from "@tanstack/react-query";
+import { FileUploader } from "@/components/post/FileUploader";
 
 const schema = z.object({
   title: z.string().min(1, "Заголовок обязателен").max(300),
@@ -20,13 +23,12 @@ type Form = z.infer<typeof schema>;
 export default function NewPostPage() {
   const router = useRouter();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [serverError, setServerError] = useState("");
+  const [createdPostId, setCreatedPostId] = useState<string | null>(null);
+  const [attachments, setAttachments] = useState<PostAttachment[]>([]);
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm<Form>({
+  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<Form>({
     resolver: zodResolver(schema),
     defaultValues: { is_free: false, publish_now: true },
   });
@@ -41,10 +43,14 @@ export default function NewPostPage() {
         is_free: values.is_free,
       });
       const post = res.data.data;
+      setCreatedPostId(post.id);
+
       if (values.publish_now) {
         await postsApi.publish(post.id);
       }
-      router.push(`/dashboard`);
+      await queryClient.invalidateQueries({ queryKey: ["my-posts"] });
+      await queryClient.invalidateQueries({ queryKey: ["creator-posts"] });
+      router.push("/dashboard");
     } catch {
       setServerError("Не удалось создать пост");
     }
@@ -56,46 +62,62 @@ export default function NewPostPage() {
     <div className="mx-auto max-w-3xl px-4 py-8">
       <h1 className="mb-6 text-2xl font-bold">Новый пост</h1>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="card p-6 space-y-5">
-        <div>
-          <label className="mb-1 block text-sm font-medium">Заголовок</label>
-          <input className="input" placeholder="О чём этот пост?" {...register("title")} />
-          {errors.title && <p className="mt-1 text-xs text-red-500">{errors.title.message}</p>}
-        </div>
+      <div className="space-y-5">
+        <form onSubmit={handleSubmit(onSubmit)} className="card p-6 space-y-5">
+          <div>
+            <label className="mb-1 block text-sm font-medium">Заголовок</label>
+            <input className="input" placeholder="О чём этот пост?" {...register("title")} />
+            {errors.title && <p className="mt-1 text-xs text-red-500">{errors.title.message}</p>}
+          </div>
 
-        <div>
-          <label className="mb-1 block text-sm font-medium">Содержание</label>
-          <textarea
-            className="input min-h-[240px] resize-y"
-            placeholder="Напишите что-нибудь..."
-            {...register("content")}
-          />
-        </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium">Содержание</label>
+            <textarea
+              className="input min-h-[200px] resize-y"
+              placeholder="Напишите что-нибудь..."
+              {...register("content")}
+            />
+          </div>
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <label className="flex cursor-pointer items-center gap-2 text-sm">
-            <input type="checkbox" className="rounded border-gray-300 text-brand-600" {...register("is_free")} />
-            Бесплатный пост (виден всем)
-          </label>
-          <label className="flex cursor-pointer items-center gap-2 text-sm">
-            <input type="checkbox" className="rounded border-gray-300 text-brand-600" {...register("publish_now")} />
-            Опубликовать сразу
-          </label>
-        </div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <input type="checkbox" className="rounded border-gray-300 text-brand-600" {...register("is_free")} />
+              Бесплатный пост (виден всем)
+            </label>
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <input type="checkbox" className="rounded border-gray-300 text-brand-600" {...register("publish_now")} />
+              Опубликовать сразу
+            </label>
+          </div>
 
-        {serverError && (
-          <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">{serverError}</div>
-        )}
+          {serverError && (
+            <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">{serverError}</div>
+          )}
 
-        <div className="flex gap-3">
-          <button type="submit" disabled={isSubmitting} className="btn-primary">
-            {isSubmitting ? "Сохраняем..." : "Сохранить"}
-          </button>
-          <button type="button" onClick={() => router.back()} className="btn-outline">
-            Отмена
-          </button>
+          <div className="flex gap-3">
+            <button type="submit" disabled={isSubmitting} className="btn-primary">
+              {isSubmitting ? "Сохраняем..." : "Сохранить"}
+            </button>
+            <button type="button" onClick={() => router.back()} className="btn-outline">
+              Отмена
+            </button>
+          </div>
+        </form>
+
+        {/* Файлы — доступны только после создания поста */}
+        <div className="card p-6">
+          <h2 className="mb-1 font-semibold">Вложения</h2>
+          {!createdPostId ? (
+            <p className="text-sm text-gray-400">Сначала сохраните пост, затем можно добавить файлы</p>
+          ) : (
+            <FileUploader
+              postId={createdPostId}
+              attachments={attachments}
+              onChange={setAttachments}
+            />
+          )}
         </div>
-      </form>
+      </div>
     </div>
   );
 }

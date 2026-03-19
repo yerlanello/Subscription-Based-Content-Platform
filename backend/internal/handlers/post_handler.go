@@ -3,26 +3,31 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"path/filepath"
 	"strconv"
+	"strings"
 
 	"diploma/backend/internal/middleware"
 	"diploma/backend/internal/models"
 	"diploma/backend/internal/repository"
 	"diploma/backend/internal/response"
 	"diploma/backend/internal/service"
+	"diploma/backend/internal/storage"
 
 	"github.com/google/uuid"
 )
 
 type PostHandler struct {
-	postSvc    *service.PostService
+	postSvc     *service.PostService
 	commentRepo *repository.CommentRepo
-	userRepo   *repository.UserRepo
+	userRepo    *repository.UserRepo
+	storage     *storage.MinioStorage
 }
 
-func NewPostHandler(postSvc *service.PostService, commentRepo *repository.CommentRepo, userRepo *repository.UserRepo) *PostHandler {
-	return &PostHandler{postSvc: postSvc, commentRepo: commentRepo, userRepo: userRepo}
+func NewPostHandler(postSvc *service.PostService, commentRepo *repository.CommentRepo, userRepo *repository.UserRepo, storage *storage.MinioStorage) *PostHandler {
+	return &PostHandler{postSvc: postSvc, commentRepo: commentRepo, userRepo: userRepo, storage: storage}
 }
 
 func (h *PostHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -103,6 +108,28 @@ func (h *PostHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	post, err := h.postSvc.Update(r.Context(), postID, claims.UserID, input.Title, input.Content, input.IsFree)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrNotFound):
+			response.Error(w, http.StatusNotFound, "post not found")
+		case errors.Is(err, service.ErrForbidden):
+			response.Error(w, http.StatusForbidden, "forbidden")
+		default:
+			response.Error(w, http.StatusInternalServerError, "internal error")
+		}
+		return
+	}
+	response.OK(w, post)
+}
+
+func (h *PostHandler) Unpublish(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r)
+	postID, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid post id")
+		return
+	}
+	post, err := h.postSvc.Unpublish(r.Context(), postID, claims.UserID)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrNotFound):
@@ -286,6 +313,96 @@ func (h *PostHandler) DeleteComment(w http.ResponseWriter, r *http.Request) {
 	if err := h.commentRepo.Delete(r.Context(), commentID, claims.UserID); err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			response.Error(w, http.StatusNotFound, "comment not found")
+			return
+		}
+		response.Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	response.NoContent(w)
+}
+
+var allowedMimeTypes = map[string]string{
+	".jpg":  "image/jpeg",
+	".jpeg": "image/jpeg",
+	".png":  "image/png",
+	".webp": "image/webp",
+	".gif":  "image/gif",
+	".mp4":  "video/mp4",
+	".webm": "video/webm",
+	".mov":  "video/quicktime",
+	".mp3":  "audio/mpeg",
+	".wav":  "audio/wav",
+	".ogg":  "audio/ogg",
+	".m4a":  "audio/mp4",
+}
+
+func (h *PostHandler) UploadAttachment(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r)
+	postID, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid post id")
+		return
+	}
+
+	// Проверяем что пост принадлежит пользователю
+	post, err := h.postSvc.GetOwn(r.Context(), postID, claims.UserID)
+	if err != nil {
+		response.Error(w, http.StatusForbidden, "forbidden")
+		return
+	}
+	_ = post
+
+	if h.storage == nil {
+		response.Error(w, http.StatusServiceUnavailable, "storage not configured")
+		return
+	}
+
+	if err := r.ParseMultipartForm(50 << 20); err != nil { // 50 MB
+		response.Error(w, http.StatusBadRequest, "file too large (max 50MB)")
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "file is required")
+		return
+	}
+	defer file.Close()
+
+	ext := strings.ToLower(filepath.Ext(header.Filename))
+	mimeType, ok := allowedMimeTypes[ext]
+	if !ok {
+		response.Error(w, http.StatusBadRequest, "unsupported file type")
+		return
+	}
+
+	objectName := fmt.Sprintf("posts/%s/%s%s", postID, uuid.New().String(), ext)
+	url, err := h.storage.UploadFile(r.Context(), file, objectName, mimeType, header.Size)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "upload failed")
+		return
+	}
+
+	attachment, err := h.postSvc.AddAttachment(r.Context(), postID, url, mimeType, header.Size)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	response.Created(w, attachment)
+}
+
+func (h *PostHandler) DeleteAttachment(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r)
+	attachmentID, err := uuid.Parse(r.PathValue("attachmentId"))
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid attachment id")
+		return
+	}
+
+	if err := h.postSvc.DeleteAttachment(r.Context(), attachmentID, claims.UserID); err != nil {
+		if errors.Is(err, service.ErrForbidden) {
+			response.Error(w, http.StatusForbidden, "forbidden")
 			return
 		}
 		response.Error(w, http.StatusInternalServerError, "internal error")

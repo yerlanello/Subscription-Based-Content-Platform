@@ -3,7 +3,9 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 
+	"diploma/backend/internal/hub"
 	"diploma/backend/internal/models"
 	"diploma/backend/internal/repository"
 
@@ -17,12 +19,14 @@ var (
 )
 
 type PostService struct {
-	postRepo *repository.PostRepo
-	subRepo  *repository.SubscriptionRepo
+	postRepo   *repository.PostRepo
+	subRepo    *repository.SubscriptionRepo
+	notifRepo  *repository.NotificationRepo
+	hub        *hub.Hub
 }
 
-func NewPostService(postRepo *repository.PostRepo, subRepo *repository.SubscriptionRepo) *PostService {
-	return &PostService{postRepo: postRepo, subRepo: subRepo}
+func NewPostService(postRepo *repository.PostRepo, subRepo *repository.SubscriptionRepo, notifRepo *repository.NotificationRepo, h *hub.Hub) *PostService {
+	return &PostService{postRepo: postRepo, subRepo: subRepo, notifRepo: notifRepo, hub: h}
 }
 
 type CreatePostInput struct {
@@ -48,6 +52,17 @@ func (s *PostService) Update(ctx context.Context, postID, requesterID uuid.UUID,
 	return s.postRepo.Update(ctx, postID, title, content, isFree)
 }
 
+func (s *PostService) Unpublish(ctx context.Context, postID, requesterID uuid.UUID) (*models.Post, error) {
+	post, err := s.postRepo.GetByID(ctx, postID)
+	if err != nil {
+		return nil, mapRepoErr(err)
+	}
+	if post.CreatorID != requesterID {
+		return nil, ErrForbidden
+	}
+	return s.postRepo.Unpublish(ctx, postID)
+}
+
 func (s *PostService) Publish(ctx context.Context, postID, requesterID uuid.UUID) (*models.Post, error) {
 	post, err := s.postRepo.GetByID(ctx, postID)
 	if err != nil {
@@ -56,7 +71,56 @@ func (s *PostService) Publish(ctx context.Context, postID, requesterID uuid.UUID
 	if post.CreatorID != requesterID {
 		return nil, ErrForbidden
 	}
-	return s.postRepo.Publish(ctx, postID)
+
+	published, err := s.postRepo.Publish(ctx, postID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Берём имя автора из первого запроса (там есть Creator)
+	creatorName := ""
+	if post.Creator != nil {
+		creatorName = post.Creator.Username
+	}
+
+	// Уведомляем подписчиков и фолловеров асинхронно
+	go s.notifyFollowers(post.CreatorID, published.ID.String(), published.Title, creatorName)
+
+	return published, nil
+}
+
+func (s *PostService) notifyFollowers(creatorID uuid.UUID, postID, postTitle, creatorName string) {
+	ctx := context.Background()
+	recipientIDs, err := s.notifRepo.GetFollowerAndSubscriberIDs(ctx, creatorID)
+	if err != nil || len(recipientIDs) == 0 {
+		return
+	}
+
+	if creatorName == "" {
+		creatorName = "Автор"
+	}
+
+	title := fmt.Sprintf("%s опубликовал новый пост", creatorName)
+	link := fmt.Sprintf("/posts/%s", postID)
+
+	// Сначала отправляем SSE всем подключённым — без задержки БД
+	event := hub.Event{
+		Type:  "new_post",
+		Title: title,
+		Body:  postTitle,
+		Link:  link,
+		ID:    postID,
+	}
+	s.hub.SendMany(recipientIDs, event)
+
+	// Потом сохраняем в БД
+	for _, uid := range recipientIDs {
+		n, err := s.notifRepo.Create(ctx, uid, "new_post", title, &postTitle, &link)
+		if err == nil {
+			// Обновляем ID события на реальный UUID из БД
+			event.ID = n.ID.String()
+		}
+	}
 }
 
 func (s *PostService) Delete(ctx context.Context, postID, requesterID uuid.UUID) error {
@@ -140,6 +204,26 @@ func (s *PostService) Like(ctx context.Context, postID, userID uuid.UUID) error 
 
 func (s *PostService) Unlike(ctx context.Context, postID, userID uuid.UUID) error {
 	return s.postRepo.Unlike(ctx, postID, userID)
+}
+
+// GetOwn — получить пост только если requester — автор
+func (s *PostService) GetOwn(ctx context.Context, postID, requesterID uuid.UUID) (*models.Post, error) {
+	post, err := s.postRepo.GetByID(ctx, postID)
+	if err != nil {
+		return nil, mapRepoErr(err)
+	}
+	if post.CreatorID != requesterID {
+		return nil, ErrForbidden
+	}
+	return post, nil
+}
+
+func (s *PostService) AddAttachment(ctx context.Context, postID uuid.UUID, url, mimeType string, size int64) (*models.PostAttachment, error) {
+	return s.postRepo.AddAttachment(ctx, postID, url, mimeType, size)
+}
+
+func (s *PostService) DeleteAttachment(ctx context.Context, attachmentID, requesterID uuid.UUID) error {
+	return s.postRepo.DeleteAttachment(ctx, attachmentID, requesterID)
 }
 
 func mapRepoErr(err error) error {

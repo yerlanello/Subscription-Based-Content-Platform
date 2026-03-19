@@ -42,7 +42,7 @@ export function PostCard({ post }: Props) {
         </div>
       </div>
 
-      <Link href={`/posts/${post.id}`}>
+      <Link href={`/posts/${post.id}${!post.is_free ? "?locked=1" : ""}`}>
         <h2 className="mb-2 font-semibold hover:text-brand-600 transition-colors">
           {post.title}
         </h2>
@@ -63,15 +63,20 @@ export function PostCard({ post }: Props) {
 
       {/* Attachments preview */}
       {post.attachments && post.attachments.length > 0 && (
-        <div className="mt-3">
-          {post.attachments[0].mime_type?.startsWith("image/") && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={post.attachments[0].url}
-              alt=""
-              className="max-h-64 w-full rounded-lg object-cover"
-            />
-          )}
+        <div className="mt-3 space-y-2">
+          {post.attachments.map((a) => {
+            const mime = a.mime_type ?? "";
+            if (mime.startsWith("image/"))
+              return (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img key={a.id} src={a.url} alt="" className="max-h-64 w-full rounded-lg object-cover" />
+              );
+            if (mime.startsWith("video/"))
+              return <video key={a.id} src={a.url} controls className="w-full rounded-lg max-h-64" />;
+            if (mime.startsWith("audio/"))
+              return <audio key={a.id} src={a.url} controls className="w-full" />;
+            return null;
+          })}
         </div>
       )}
 
@@ -83,9 +88,9 @@ export function PostCard({ post }: Props) {
         </span>
         <span className="flex items-center gap-1">
           <MessageCircle size={14} />
-          Комментарии
+          {post.comments_count ?? 0}
         </span>
-        <Link href={`/posts/${post.id}`} className="ml-auto text-brand-600 hover:underline">
+        <Link href={`/posts/${post.id}${!post.is_free ? "?locked=1" : ""}`} className="ml-auto text-brand-600 hover:underline">
           Читать →
         </Link>
       </div>

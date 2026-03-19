@@ -8,9 +8,11 @@ import (
 	"os"
 
 	"diploma/backend/internal/handlers"
+	"diploma/backend/internal/hub"
 	"diploma/backend/internal/middleware"
 	"diploma/backend/internal/repository"
 	"diploma/backend/internal/service"
+	"diploma/backend/internal/storage"
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
@@ -41,6 +43,24 @@ func main() {
 	}
 	defer pool.Close()
 
+	// Storage (MinIO)
+	minioEndpoint := os.Getenv("MINIO_ENDPOINT")
+	minioAccess := os.Getenv("MINIO_ACCESS_KEY")
+	minioSecret := os.Getenv("MINIO_SECRET_KEY")
+	minioBucket := os.Getenv("MINIO_BUCKET")
+	minioPublicURL := os.Getenv("MINIO_PUBLIC_URL")
+	if minioBucket == "" {
+		minioBucket = "media"
+	}
+	var minioStorage *storage.MinioStorage
+	if minioEndpoint != "" {
+		var err error
+		minioStorage, err = storage.NewMinioStorage(minioEndpoint, minioAccess, minioSecret, minioBucket, minioPublicURL)
+		if err != nil {
+			log.Printf("warn: minio init failed: %v", err)
+		}
+	}
+
 	// Repos
 	userRepo := repository.NewUserRepo(pool)
 	creatorRepo := repository.NewCreatorRepo(pool)
@@ -48,16 +68,21 @@ func main() {
 	commentRepo := repository.NewCommentRepo(pool)
 	subRepo := repository.NewSubscriptionRepo(pool)
 	followRepo := repository.NewFollowRepo(pool)
+	notifRepo := repository.NewNotificationRepo(pool)
+
+	// Hub
+	notifHub := hub.New()
 
 	// Services
 	authSvc := service.NewAuthService(userRepo, jwtSecret)
-	postSvc := service.NewPostService(postRepo, subRepo)
+	postSvc := service.NewPostService(postRepo, subRepo, notifRepo, notifHub)
 
 	// Handlers
 	authH := handlers.NewAuthHandler(authSvc)
-	userH := handlers.NewUserHandler(userRepo)
+	userH := handlers.NewUserHandler(userRepo, minioStorage)
 	creatorH := handlers.NewCreatorHandler(creatorRepo, userRepo, subRepo, followRepo)
-	postH := handlers.NewPostHandler(postSvc, commentRepo, userRepo)
+	postH := handlers.NewPostHandler(postSvc, commentRepo, userRepo, minioStorage)
+	notifH := handlers.NewNotificationHandler(notifRepo, notifHub)
 
 	// Router
 	r := chi.NewRouter()
@@ -88,6 +113,7 @@ func main() {
 		r.Route("/users", func(r chi.Router) {
 			r.With(authMiddleware).Get("/me", userH.Me)
 			r.With(authMiddleware).Put("/me", userH.UpdateMe)
+			r.With(authMiddleware).Post("/me/avatar", userH.UploadAvatar)
 			r.With(authMiddleware).Get("/me/subscriptions", creatorH.MySubscriptions)
 			r.Get("/{username}", userH.GetByUsername)
 		})
@@ -105,6 +131,17 @@ func main() {
 			r.With(optionalAuth).Get("/{username}/posts", postH.ListByCreator)
 		})
 
+		// Notifications
+		sseAuth := middleware.SSEAuth(jwtSecret)
+		r.Route("/notifications", func(r chi.Router) {
+			r.With(authMiddleware).Get("/", notifH.List)
+			r.With(sseAuth).Get("/stream", notifH.Stream)
+			r.With(authMiddleware).Post("/read-all", notifH.MarkAllRead)
+			r.With(authMiddleware).Delete("/", notifH.DeleteAll)
+			r.With(authMiddleware).Post("/{id}/read", notifH.MarkRead)
+			r.With(authMiddleware).Delete("/{id}", notifH.Delete)
+		})
+
 		// Posts
 		r.Route("/posts", func(r chi.Router) {
 			r.With(authMiddleware).Get("/feed", postH.Feed)
@@ -112,12 +149,15 @@ func main() {
 			r.With(optionalAuth).Get("/{id}", postH.Get)
 			r.With(authMiddleware).Put("/{id}", postH.Update)
 			r.With(authMiddleware).Post("/{id}/publish", postH.Publish)
+			r.With(authMiddleware).Post("/{id}/unpublish", postH.Unpublish)
 			r.With(authMiddleware).Delete("/{id}", postH.Delete)
 			r.With(authMiddleware).Post("/{id}/like", postH.Like)
 			r.With(authMiddleware).Delete("/{id}/like", postH.Unlike)
 			r.With(optionalAuth).Get("/{id}/comments", postH.GetComments)
 			r.With(authMiddleware).Post("/{id}/comments", postH.CreateComment)
 			r.With(authMiddleware).Delete("/{id}/comments/{commentId}", postH.DeleteComment)
+			r.With(authMiddleware).Post("/{id}/attachments", postH.UploadAttachment)
+			r.With(authMiddleware).Delete("/{id}/attachments/{attachmentId}", postH.DeleteAttachment)
 		})
 	})
 

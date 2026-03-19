@@ -51,7 +51,7 @@ type CreatorProfile struct {
 }
 
 type CreatorWithProfile struct {
-	User
+	User    User           `json:"user"`
 	Profile CreatorProfile `json:"profile"`
 }
 
@@ -83,10 +83,11 @@ type Post struct {
 	UpdatedAt   time.Time  `json:"updated_at"`
 
 	// Joined fields
-	Attachments []PostAttachment `json:"attachments,omitempty"`
-	LikesCount  int              `json:"likes_count,omitempty"`
-	IsLiked     bool             `json:"is_liked,omitempty"`
-	Creator     *PublicUser      `json:"creator,omitempty"`
+	Attachments    []PostAttachment `json:"attachments,omitempty"`
+	LikesCount     int              `json:"likes_count,omitempty"`
+	CommentsCount  int              `json:"comments_count,omitempty"`
+	IsLiked        bool             `json:"is_liked,omitempty"`
+	Creator        *PublicUser      `json:"creator,omitempty"`
 }
 
 type PostAttachment struct {

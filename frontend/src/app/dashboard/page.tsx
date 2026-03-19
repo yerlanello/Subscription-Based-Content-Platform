@@ -9,14 +9,16 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 import { ru } from "date-fns/locale";
-import { PlusCircle, Eye, EyeOff, Trash2, Send } from "lucide-react";
+import { PlusCircle, Eye, EyeOff, Trash2, Send, Pencil } from "lucide-react";
 import { BecomeCreatorModal } from "@/components/creator/BecomeCreatorModal";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 
 export default function DashboardPage() {
   const { user, isLoading } = useAuth();
   const router = useRouter();
   const queryClient = useQueryClient();
   const [showModal, setShowModal] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isLoading && !user) router.push("/login");
@@ -88,7 +90,7 @@ export default function DashboardPage() {
                   <p className="mt-2 text-sm font-medium text-brand-600">
                     {creator.profile.subscription_price_cents === 0
                       ? "Бесплатная подписка"
-                      : `${creator.profile.subscription_price_cents / 100} ₸/мес`}
+                      : `${creator.profile.subscription_price_cents} ₸/мес`}
                   </p>
                 </>
               )}
@@ -151,10 +153,15 @@ export default function DashboardPage() {
                             <EyeOff size={15} className="text-gray-300" />
                           )}
                         </span>
+                        <Link
+                          href={`/dashboard/posts/${post.id}`}
+                          className="btn-ghost p-2 text-gray-500"
+                          title="Редактировать"
+                        >
+                          <Pencil size={15} />
+                        </Link>
                         <button
-                          onClick={() => {
-                            if (confirm("Удалить пост?")) deleteMutation.mutate(post.id);
-                          }}
+                          onClick={() => setDeleteTarget(post.id)}
                           className="btn-ghost p-2 text-red-400"
                         >
                           <Trash2 size={15} />
@@ -167,6 +174,17 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {deleteTarget && (
+        <ConfirmModal
+          title="Удалить пост?"
+          message="Это действие нельзя отменить. Пост будет удалён безвозвратно."
+          confirmLabel="Удалить"
+          danger
+          onConfirm={() => deleteMutation.mutate(deleteTarget)}
+          onClose={() => setDeleteTarget(null)}
+        />
       )}
     </div>
   );

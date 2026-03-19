@@ -86,16 +86,20 @@ export default function DashboardSettingsPage() {
 
         <div>
           <label className="mb-1 block text-sm font-medium">
-            Цена подписки (в тиынах, 0 = бесплатно)
+            Цена подписки (₸/мес, 0 = бесплатно)
           </label>
-          <input
-            className="input"
-            type="number"
-            min={0}
-            step={100}
-            {...register("subscription_price_cents")}
-          />
-          <p className="mt-1 text-xs text-gray-400">Пример: 500 = 5 ₸/мес</p>
+          <div className="relative">
+            <input
+              className="input pr-10"
+              type="number"
+              min={0}
+              step={100}
+              placeholder="0"
+              {...register("subscription_price_cents")}
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">₸</span>
+          </div>
+          <p className="mt-1 text-xs text-gray-400">Пример: 500 ₸/мес</p>
         </div>
 
         <div>

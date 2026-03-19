@@ -34,12 +34,17 @@ func (r *PostRepo) Create(ctx context.Context, creatorID uuid.UUID, title string
 
 func (r *PostRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.Post, error) {
 	post := &models.Post{}
+	creator := &models.PublicUser{}
 	err := r.db.QueryRow(ctx, `
-		SELECT id, creator_id, title, content, type, is_free, is_published, published_at, created_at, updated_at
-		FROM posts WHERE id = $1
+		SELECT p.id, p.creator_id, p.title, p.content, p.type, p.is_free, p.is_published, p.published_at, p.created_at, p.updated_at,
+		       u.id, u.username, u.avatar_url
+		FROM posts p
+		JOIN users u ON u.id = p.creator_id
+		WHERE p.id = $1
 	`, id).Scan(
 		&post.ID, &post.CreatorID, &post.Title, &post.Content, &post.Type,
 		&post.IsFree, &post.IsPublished, &post.PublishedAt, &post.CreatedAt, &post.UpdatedAt,
+		&creator.ID, &creator.Username, &creator.AvatarURL,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -47,6 +52,7 @@ func (r *PostRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.Post, err
 		}
 		return nil, err
 	}
+	post.Creator = creator
 	return post, nil
 }
 
@@ -92,6 +98,25 @@ func (r *PostRepo) Publish(ctx context.Context, id uuid.UUID) (*models.Post, err
 	return post, nil
 }
 
+func (r *PostRepo) Unpublish(ctx context.Context, id uuid.UUID) (*models.Post, error) {
+	post := &models.Post{}
+	err := r.db.QueryRow(ctx, `
+		UPDATE posts SET is_published = false, updated_at = NOW()
+		WHERE id = $1
+		RETURNING id, creator_id, title, content, type, is_free, is_published, published_at, created_at, updated_at
+	`, id).Scan(
+		&post.ID, &post.CreatorID, &post.Title, &post.Content, &post.Type,
+		&post.IsFree, &post.IsPublished, &post.PublishedAt, &post.CreatedAt, &post.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return post, nil
+}
+
 func (r *PostRepo) Delete(ctx context.Context, id uuid.UUID) error {
 	tag, err := r.db.Exec(ctx, `DELETE FROM posts WHERE id = $1`, id)
 	if err != nil {
@@ -106,26 +131,30 @@ func (r *PostRepo) Delete(ctx context.Context, id uuid.UUID) error {
 // ListByCreator — посты конкретного автора
 func (r *PostRepo) ListByCreator(ctx context.Context, creatorID uuid.UUID, limit, offset int, onlyPublished bool) ([]models.Post, error) {
 	query := `
-		SELECT id, creator_id, title, content, type, is_free, is_published, published_at, created_at, updated_at
-		FROM posts WHERE creator_id = $1
+		SELECT p.id, p.creator_id, p.title, p.content, p.type, p.is_free, p.is_published, p.published_at, p.created_at, p.updated_at,
+		       (SELECT COUNT(*) FROM likes    WHERE post_id = p.id) AS likes_count,
+		       (SELECT COUNT(*) FROM comments WHERE post_id = p.id) AS comments_count
+		FROM posts p WHERE p.creator_id = $1
 	`
 	if onlyPublished {
-		query += ` AND is_published = true`
+		query += ` AND p.is_published = true`
 	}
-	query += ` ORDER BY created_at DESC LIMIT $2 OFFSET $3`
+	query += ` ORDER BY p.created_at DESC LIMIT $2 OFFSET $3`
 
 	rows, err := r.db.Query(ctx, query, creatorID, limit, offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	return scanPosts(rows)
+	return scanPostsWithCounts(rows)
 }
 
 // Feed — посты от авторов, на которых подписан пользователь
 func (r *PostRepo) Feed(ctx context.Context, userID uuid.UUID, limit, offset int) ([]models.Post, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT p.id, p.creator_id, p.title, p.content, p.type, p.is_free, p.is_published, p.published_at, p.created_at, p.updated_at
+		SELECT p.id, p.creator_id, p.title, p.content, p.type, p.is_free, p.is_published, p.published_at, p.created_at, p.updated_at,
+		       (SELECT COUNT(*) FROM likes    WHERE post_id = p.id) AS likes_count,
+		       (SELECT COUNT(*) FROM comments WHERE post_id = p.id) AS comments_count
 		FROM posts p
 		JOIN subscriptions s ON s.creator_id = p.creator_id
 		WHERE s.patron_id = $1 AND s.status = 'active' AND p.is_published = true
@@ -136,7 +165,7 @@ func (r *PostRepo) Feed(ctx context.Context, userID uuid.UUID, limit, offset int
 		return nil, err
 	}
 	defer rows.Close()
-	return scanPosts(rows)
+	return scanPostsWithCounts(rows)
 }
 
 // LikesCount
@@ -179,6 +208,22 @@ func (r *PostRepo) AddAttachment(ctx context.Context, postID uuid.UUID, url, mim
 	return a, err
 }
 
+func (r *PostRepo) DeleteAttachment(ctx context.Context, attachmentID, requesterID uuid.UUID) error {
+	// Проверяем что requester — автор поста через JOIN
+	tag, err := r.db.Exec(ctx, `
+		DELETE FROM post_attachments pa
+		USING posts p
+		WHERE pa.id = $1 AND pa.post_id = p.id AND p.creator_id = $2
+	`, attachmentID, requesterID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (r *PostRepo) GetAttachments(ctx context.Context, postID uuid.UUID) ([]models.PostAttachment, error) {
 	rows, err := r.db.Query(ctx, `
 		SELECT id, post_id, url, mime_type, size_bytes, created_at
@@ -207,6 +252,22 @@ func scanPosts(rows pgx.Rows) ([]models.Post, error) {
 		if err := rows.Scan(
 			&p.ID, &p.CreatorID, &p.Title, &p.Content, &p.Type,
 			&p.IsFree, &p.IsPublished, &p.PublishedAt, &p.CreatedAt, &p.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		posts = append(posts, p)
+	}
+	return posts, nil
+}
+
+func scanPostsWithCounts(rows pgx.Rows) ([]models.Post, error) {
+	var posts []models.Post
+	for rows.Next() {
+		var p models.Post
+		if err := rows.Scan(
+			&p.ID, &p.CreatorID, &p.Title, &p.Content, &p.Type,
+			&p.IsFree, &p.IsPublished, &p.PublishedAt, &p.CreatedAt, &p.UpdatedAt,
+			&p.LikesCount, &p.CommentsCount,
 		); err != nil {
 			return nil, err
 		}

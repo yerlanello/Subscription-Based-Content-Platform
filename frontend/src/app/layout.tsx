@@ -7,7 +7,7 @@ import { Navbar } from "@/components/layout/Navbar";
 const inter = Inter({ subsets: ["latin", "cyrillic"] });
 
 export const metadata: Metadata = {
-  title: "Patreon Platform",
+  title: "Xabarla",
   description: "Поддержи любимых авторов",
 };
 
@@ -21,7 +21,7 @@ export default function RootLayout({
       <body className={inter.className}>
         <Providers>
           <Navbar />
-          <main className="min-h-screen">{children}</main>
+          <main className="min-h-screen page-enter">{children}</main>
         </Providers>
       </body>
     </html>

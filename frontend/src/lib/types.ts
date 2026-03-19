@@ -66,6 +66,7 @@ export interface Post {
   updated_at: string;
   attachments?: PostAttachment[];
   likes_count?: number;
+  comments_count?: number;
   is_liked?: boolean;
   creator?: PublicUser;
 }
