@@ -6,6 +6,7 @@ backend/tmp/
 frontend/.env.local
 frontend/node_modules/
 frontend/.next/
+frontend/tsconfig.tsbuildinfo
 
 # Flutter
 mobile/.dart_tool/
