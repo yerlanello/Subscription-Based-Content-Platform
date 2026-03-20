@@ -108,9 +108,14 @@ export default function PostPage({ params }: { params: { id: string } }) {
         {/* Header */}
         <div className="mb-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-100 text-brand-600 font-semibold">
-              {post.creator?.username?.[0]?.toUpperCase() ?? "?"}
-            </div>
+            {post.creator?.avatar_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={post.creator.avatar_url} alt={post.creator.username} className="h-10 w-10 rounded-full object-cover" />
+            ) : (
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-100 text-brand-600 font-semibold">
+                {post.creator?.username?.[0]?.toUpperCase() ?? "?"}
+              </div>
+            )}
             <div>
               <Link
                 href={`/${post.creator?.username}`}
@@ -216,9 +221,14 @@ export default function PostPage({ params }: { params: { id: string } }) {
           ) : (
             comments.map((c) => (
               <div key={c.id} className="flex gap-3">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100 text-sm font-semibold">
-                  {c.author?.username?.[0]?.toUpperCase()}
-                </div>
+                {c.author?.avatar_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={c.author.avatar_url} alt={c.author.username} className="h-8 w-8 shrink-0 rounded-full object-cover" />
+                ) : (
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100 text-sm font-semibold">
+                    {c.author?.username?.[0]?.toUpperCase()}
+                  </div>
+                )}
                 <div className="flex-1">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium">{c.author?.username}</span>
