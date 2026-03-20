@@ -83,6 +83,7 @@ func main() {
 	creatorH := handlers.NewCreatorHandler(creatorRepo, userRepo, subRepo, followRepo)
 	postH := handlers.NewPostHandler(postSvc, commentRepo, userRepo, minioStorage)
 	notifH := handlers.NewNotificationHandler(notifRepo, notifHub)
+	stripeH := handlers.NewStripeHandler(subRepo, creatorRepo, userRepo)
 
 	// Router
 	r := chi.NewRouter()
@@ -129,7 +130,13 @@ func main() {
 			r.With(authMiddleware).Post("/{username}/follow", creatorH.Follow)
 			r.With(authMiddleware).Delete("/{username}/follow", creatorH.Unfollow)
 			r.With(optionalAuth).Get("/{username}/posts", postH.ListByCreator)
+			r.With(authMiddleware).Post("/{username}/checkout", stripeH.CreateCheckout)
 		})
+
+		// Stripe webhook (no auth — Stripe подписывает запрос своей подписью)
+		r.Post("/webhooks/stripe", stripeH.Webhook)
+		// Verify stripe session and create subscription
+		r.With(authMiddleware).Post("/subscriptions/verify-session", stripeH.VerifySession)
 
 		// Notifications
 		sseAuth := middleware.SSEAuth(jwtSecret)

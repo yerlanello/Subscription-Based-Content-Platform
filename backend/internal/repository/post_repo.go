@@ -152,12 +152,28 @@ func (r *PostRepo) ListByCreator(ctx context.Context, creatorID uuid.UUID, limit
 // Feed — посты от авторов, на которых подписан пользователь
 func (r *PostRepo) Feed(ctx context.Context, userID uuid.UUID, limit, offset int) ([]models.Post, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT p.id, p.creator_id, p.title, p.content, p.type, p.is_free, p.is_published, p.published_at, p.created_at, p.updated_at,
+		SELECT DISTINCT p.id, p.creator_id, p.title, p.content, p.type, p.is_free, p.is_published, p.published_at, p.created_at, p.updated_at,
 		       (SELECT COUNT(*) FROM likes    WHERE post_id = p.id) AS likes_count,
-		       (SELECT COUNT(*) FROM comments WHERE post_id = p.id) AS comments_count
+		       (SELECT COUNT(*) FROM comments WHERE post_id = p.id) AS comments_count,
+		       u.id, u.username, u.avatar_url
 		FROM posts p
-		JOIN subscriptions s ON s.creator_id = p.creator_id
-		WHERE s.patron_id = $1 AND s.status = 'active' AND p.is_published = true
+		JOIN users u ON u.id = p.creator_id
+		WHERE p.is_published = true AND (
+		    p.creator_id IN (
+		        SELECT creator_id FROM subscriptions
+		        WHERE patron_id = $1 AND status = 'active'
+		    )
+		    OR (
+		        p.is_free = true
+		        AND p.creator_id IN (
+		            SELECT creator_id FROM follows WHERE follower_id = $1
+		        )
+		        AND p.creator_id NOT IN (
+		            SELECT creator_id FROM subscriptions
+		            WHERE patron_id = $1 AND status = 'active'
+		        )
+		    )
+		)
 		ORDER BY p.published_at DESC
 		LIMIT $2 OFFSET $3
 	`, userID, limit, offset)
@@ -165,7 +181,7 @@ func (r *PostRepo) Feed(ctx context.Context, userID uuid.UUID, limit, offset int
 		return nil, err
 	}
 	defer rows.Close()
-	return scanPostsWithCounts(rows)
+	return scanPostsWithCountsAndCreator(rows)
 }
 
 // LikesCount
@@ -271,6 +287,25 @@ func scanPostsWithCounts(rows pgx.Rows) ([]models.Post, error) {
 		); err != nil {
 			return nil, err
 		}
+		posts = append(posts, p)
+	}
+	return posts, nil
+}
+
+func scanPostsWithCountsAndCreator(rows pgx.Rows) ([]models.Post, error) {
+	var posts []models.Post
+	for rows.Next() {
+		var p models.Post
+		c := &models.PublicUser{}
+		if err := rows.Scan(
+			&p.ID, &p.CreatorID, &p.Title, &p.Content, &p.Type,
+			&p.IsFree, &p.IsPublished, &p.PublishedAt, &p.CreatedAt, &p.UpdatedAt,
+			&p.LikesCount, &p.CommentsCount,
+			&c.ID, &c.Username, &c.AvatarURL,
+		); err != nil {
+			return nil, err
+		}
+		p.Creator = c
 		posts = append(posts, p)
 	}
 	return posts, nil

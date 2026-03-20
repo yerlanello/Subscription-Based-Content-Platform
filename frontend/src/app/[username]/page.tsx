@@ -6,9 +6,10 @@ import { CreatorPage, Post } from "@/lib/types";
 import { useAuth } from "@/hooks/useAuth";
 import { PostCard } from "@/components/post/PostCard";
 import { formatPrice } from "@/lib/auth";
-import { UserCheck, Heart, CreditCard, Lock } from "lucide-react";
-import { useState, useEffect } from "react";
+import { UserCheck, Heart, CreditCard, AlertTriangle } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 
 export default function CreatorProfilePage({
   params,
@@ -24,8 +25,6 @@ export default function CreatorProfilePage({
     if (!authLoading && !user) router.push("/register");
   }, [user, authLoading, router]);
 
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-
   const { data: creator, isLoading } = useQuery({
     queryKey: ["creator", username],
     queryFn: () =>
@@ -39,13 +38,34 @@ export default function CreatorProfilePage({
     enabled: !!creator,
   });
 
+  const [subscribeError, setSubscribeError] = useState<string | null>(null);
+  const [showUnsubscribeModal, setShowUnsubscribeModal] = useState(false);
+
   const subscribeMutation = useMutation({
-    mutationFn: () =>
-      creator!.is_subscribed
-        ? creatorsApi.unsubscribe(username)
-        : creatorsApi.subscribe(username),
+    mutationFn: async () => {
+      setSubscribeError(null);
+      if (creator!.is_subscribed) {
+        return creatorsApi.unsubscribe(username);
+      }
+      // Платная подписка — редирект на Stripe
+      if (creator!.profile.subscription_price_cents > 0) {
+        const res = await creatorsApi.createCheckout(username);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const url = (res.data as any)?.data?.url ?? (res.data as any)?.url;
+        if (!url) throw new Error("Не удалось получить ссылку на оплату");
+        window.location.href = url;
+        return;
+      }
+      // Бесплатная подписка — сразу
+      return creatorsApi.subscribe(username);
+    },
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ["creator", username] }),
+    onError: (err: unknown) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const msg = (err as any)?.response?.data?.error ?? (err as any)?.message ?? "Ошибка при оформлении подписки";
+      setSubscribeError(msg);
+    },
   });
 
   const followMutation = useMutation({
@@ -124,21 +144,30 @@ export default function CreatorProfilePage({
           <div className="flex flex-col gap-2 sm:items-end">
             {creator.is_subscribed ? (
               <button
-                onClick={() => subscribeMutation.mutate()}
+                onClick={() => setShowUnsubscribeModal(true)}
                 disabled={subscribeMutation.isPending}
                 className="btn-outline min-w-[160px]"
               >
                 <UserCheck size={16} />
-                Отписаться
+                {subscribeMutation.isPending ? "Загрузка..." : "Отписаться"}
               </button>
             ) : (
               <button
-                onClick={() => setShowPaymentModal(true)}
+                onClick={() => subscribeMutation.mutate()}
+                disabled={subscribeMutation.isPending}
                 className="btn-primary min-w-[160px]"
               >
                 <CreditCard size={16} />
-                {price === 0 ? "Подписаться бесплатно" : `Подписаться · ${formatPrice(price)}`}
+                {subscribeMutation.isPending
+                  ? "Загрузка..."
+                  : price === 0
+                  ? "Подписаться бесплатно"
+                  : `Подписаться · ${formatPrice(price)}`}
               </button>
+            )}
+
+            {subscribeError && (
+              <p className="text-xs text-red-500 max-w-[200px] text-right">{subscribeError}</p>
             )}
 
             {/* Follow */}
@@ -163,35 +192,6 @@ export default function CreatorProfilePage({
         )}
       </div>
 
-      {/* Payment Modal */}
-      {showPaymentModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-          <div className="card w-full max-w-md p-6">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Оформить подписку</h2>
-              <button onClick={() => setShowPaymentModal(false)} className="btn-ghost p-1 text-gray-400">✕</button>
-            </div>
-            <div className="mb-6 rounded-xl bg-gray-50 p-4 text-center">
-              <p className="text-2xl font-bold text-brand-600">{formatPrice(price)}</p>
-              <p className="text-sm text-gray-500">в месяц</p>
-              {creator.profile.subscription_description && (
-                <p className="mt-2 text-sm text-gray-600">{creator.profile.subscription_description}</p>
-              )}
-            </div>
-            <div className="flex items-center gap-3 rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4">
-              <Lock size={20} className="shrink-0 text-gray-400" />
-              <div>
-                <p className="text-sm font-medium text-gray-700">Оплата пока недоступна</p>
-                <p className="text-xs text-gray-400">Система оплаты находится в разработке. Скоро появится возможность оплаты картой.</p>
-              </div>
-            </div>
-            <button onClick={() => setShowPaymentModal(false)} className="btn-outline mt-4 w-full">
-              Закрыть
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Posts */}
       <h2 className="mb-4 text-lg font-semibold">Посты</h2>
       {!posts || posts.length === 0 ? (
@@ -202,6 +202,27 @@ export default function CreatorProfilePage({
             <PostCard key={post.id} post={post} />
           ))}
         </div>
+      )}
+
+      {showUnsubscribeModal && (
+        <ConfirmModal
+          title="Отписаться от автора?"
+          message={
+            <div className="space-y-3">
+              <div className="flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-amber-800">
+                <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+                <span>Денежные средства за текущий период не возвращаются.</span>
+              </div>
+              <p>Вы потеряете доступ ко всем платным постам <strong>{creator.profile.display_name}</strong>.</p>
+              <p className="text-gray-400 text-xs">Автор будет скучать. Может, просто пауза? 🥺</p>
+            </div>
+          }
+          confirmLabel="Всё равно отписаться"
+          cancelLabel="Остаться"
+          danger
+          onConfirm={() => subscribeMutation.mutate()}
+          onClose={() => setShowUnsubscribeModal(false)}
+        />
       )}
     </div>
   );

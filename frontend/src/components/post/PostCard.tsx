@@ -19,9 +19,14 @@ export function PostCard({ post }: Props) {
       <div className="mb-3 flex items-center justify-between">
         {post.creator && (
           <Link href={`/${post.creator.username}`} className="flex items-center gap-2 text-sm hover:text-brand-600">
-            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-600">
-              {post.creator.username[0].toUpperCase()}
-            </div>
+            {post.creator.avatar_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={post.creator.avatar_url} alt={post.creator.username} className="h-7 w-7 rounded-full object-cover" />
+            ) : (
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-600">
+                {post.creator.username[0].toUpperCase()}
+              </div>
+            )}
             <span className="font-medium">{post.creator.username}</span>
           </Link>
         )}

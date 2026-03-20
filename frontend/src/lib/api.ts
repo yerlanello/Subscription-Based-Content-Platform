@@ -130,6 +130,14 @@ export const creatorsApi = {
   unfollow: (username: string) => api.delete(`/creators/${username}/follow`),
   getPosts: (username: string, params?: { limit?: number; offset?: number }) =>
     api.get(`/creators/${username}/posts`, { params }),
+  createCheckout: (username: string) =>
+    api.post<{ data: { url: string } }>(`/creators/${username}/checkout`),
+};
+
+// --- Subscriptions ---
+export const subscriptionsApi = {
+  verifySession: (sessionId: string) =>
+    api.post("/subscriptions/verify-session", { session_id: sessionId }),
 };
 
 // --- Notifications ---

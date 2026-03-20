@@ -1,9 +1,12 @@
 "use client";
 
+import { ReactNode } from "react";
+
 interface Props {
   title: string;
-  message: string;
+  message: ReactNode;
   confirmLabel?: string;
+  cancelLabel?: string;
   onConfirm: () => void;
   onClose: () => void;
   danger?: boolean;
@@ -13,18 +16,19 @@ export function ConfirmModal({
   title,
   message,
   confirmLabel = "Подтвердить",
+  cancelLabel = "Отмена",
   onConfirm,
   onClose,
   danger = false,
 }: Props) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
       <div className="card w-full max-w-sm p-6 shadow-xl">
         <h2 className="mb-2 text-lg font-semibold">{title}</h2>
-        <p className="mb-6 text-sm text-gray-600">{message}</p>
+        <div className="mb-6 text-sm text-gray-600">{message}</div>
         <div className="flex justify-end gap-3">
           <button onClick={onClose} className="btn-outline">
-            Отмена
+            {cancelLabel}
           </button>
           <button
             onClick={() => { onConfirm(); onClose(); }}
