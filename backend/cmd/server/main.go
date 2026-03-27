@@ -69,6 +69,7 @@ func main() {
 	subRepo := repository.NewSubscriptionRepo(pool)
 	followRepo := repository.NewFollowRepo(pool)
 	notifRepo := repository.NewNotificationRepo(pool)
+	donationRepo := repository.NewDonationRepo(pool)
 
 	// Hub
 	notifHub := hub.New()
@@ -83,7 +84,7 @@ func main() {
 	creatorH := handlers.NewCreatorHandler(creatorRepo, userRepo, subRepo, followRepo)
 	postH := handlers.NewPostHandler(postSvc, commentRepo, userRepo, minioStorage)
 	notifH := handlers.NewNotificationHandler(notifRepo, notifHub)
-	stripeH := handlers.NewStripeHandler(subRepo, creatorRepo, userRepo)
+	stripeH := handlers.NewStripeHandler(subRepo, creatorRepo, userRepo, donationRepo)
 
 	// Router
 	r := chi.NewRouter()
@@ -116,6 +117,7 @@ func main() {
 			r.With(authMiddleware).Put("/me", userH.UpdateMe)
 			r.With(authMiddleware).Post("/me/avatar", userH.UploadAvatar)
 			r.With(authMiddleware).Get("/me/subscriptions", creatorH.MySubscriptions)
+			r.With(authMiddleware).Get("/me/following", creatorH.MyFollowing)
 			r.Get("/{username}", userH.GetByUsername)
 		})
 
@@ -137,6 +139,9 @@ func main() {
 		r.Post("/webhooks/stripe", stripeH.Webhook)
 		// Verify stripe session and create subscription
 		r.With(authMiddleware).Post("/subscriptions/verify-session", stripeH.VerifySession)
+		// Donations
+		r.With(authMiddleware).Post("/creators/{username}/donate", stripeH.CreateDonationCheckout)
+		r.With(authMiddleware).Post("/donations/verify", stripeH.VerifyDonation)
 
 		// Notifications
 		sseAuth := middleware.SSEAuth(jwtSecret)

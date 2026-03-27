@@ -222,3 +222,17 @@ func (h *CreatorHandler) MySubscriptions(w http.ResponseWriter, r *http.Request)
 	}
 	response.OK(w, subs)
 }
+
+// MyFollowing — авторы, на которых подписан пользователь (follow)
+func (h *CreatorHandler) MyFollowing(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r)
+	creators, err := h.followRepo.GetFollowing(r.Context(), claims.UserID)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if creators == nil {
+		creators = []models.CreatorWithProfile{}
+	}
+	response.OK(w, creators)
+}

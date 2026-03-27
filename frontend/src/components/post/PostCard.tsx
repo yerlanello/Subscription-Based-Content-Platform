@@ -5,6 +5,7 @@ import { Post } from "@/lib/types";
 import { formatDistanceToNow } from "date-fns";
 import { ru } from "date-fns/locale";
 import { Heart, Lock, MessageCircle } from "lucide-react";
+import { RenderContent } from "./RenderContent";
 
 interface Props {
   post: Post;
@@ -54,15 +55,17 @@ export function PostCard({ post }: Props) {
       </Link>
 
       {isLocked ? (
-        <div className="flex items-center gap-2 rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-400">
+        <div className="flex items-center gap-2 rounded-lg bg-gray-50 dark:bg-gray-800 px-4 py-3 text-sm text-gray-400">
           <Lock size={14} />
           Подпишитесь чтобы читать этот пост
         </div>
       ) : (
         post.content && (
-          <p className="text-sm text-gray-600 line-clamp-3 whitespace-pre-wrap">
-            {post.content}
-          </p>
+          <RenderContent
+            content={post.content}
+            preview
+            className="text-sm text-gray-600 dark:text-gray-400 line-clamp-3"
+          />
         )
       )}
 

@@ -127,3 +127,14 @@ type PublicUser struct {
 	Username  string    `json:"username"`
 	AvatarURL *string   `json:"avatar_url"`
 }
+
+type Donation struct {
+	ID              uuid.UUID   `json:"id"`
+	DonorID         uuid.UUID   `json:"donor_id"`
+	CreatorID       uuid.UUID   `json:"creator_id"`
+	AmountCents     int         `json:"amount_cents"`
+	Message         *string     `json:"message"`
+	StripeSessionID *string     `json:"stripe_session_id,omitempty"`
+	CreatedAt       time.Time   `json:"created_at"`
+	Donor           *PublicUser `json:"donor,omitempty"`
+}

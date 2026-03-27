@@ -6,30 +6,40 @@ import { CreatorCard } from "@/components/creator/CreatorCard";
 import { CreatorWithProfile } from "@/lib/types";
 import { Search } from "lucide-react";
 import { useState } from "react";
+import { useAuth } from "@/hooks/useAuth";
+import { LandingPage } from "@/components/layout/LandingPage";
 
 const CATEGORIES = ["Музыка", "Искусство", "Подкасты", "Игры", "Образование", "Другое"];
 
 export default function HomePage() {
+  const { user, isLoading: authLoading } = useAuth();
   const [category, setCategory] = useState<string | undefined>();
   const [search, setSearch] = useState("");
 
   const { data, isLoading } = useQuery({
     queryKey: ["creators", category],
     queryFn: () => creatorsApi.list({ limit: 24, category }).then((r) => r.data.data as CreatorWithProfile[]),
+    enabled: !!user,
   });
 
   const filtered = (data ?? []).filter((c) =>
     c.profile.display_name.toLowerCase().includes(search.toLowerCase())
   );
 
+  // Пока идёт проверка авторизации — ничего не показываем (SplashScreen уже обрабатывает это)
+  if (authLoading) return null;
+
+  // Незарегистрированным — лендинг
+  if (!user) return <LandingPage />;
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
       {/* Hero */}
       <div className="mb-10 text-center">
-        <h1 className="text-4xl font-bold text-gray-900">
+        <h1 className="text-4xl font-bold text-gray-900 dark:text-gray-100">
           Поддержи любимых авторов
         </h1>
-        <p className="mt-3 text-lg text-gray-500">
+        <p className="mt-3 text-lg text-gray-500 dark:text-gray-400">
           Подписывайся на авторов и получай эксклюзивный контент
         </p>
       </div>
@@ -51,7 +61,7 @@ export default function HomePage() {
             className={`rounded-full px-3 py-1 text-sm font-medium transition-colors ${
               !category
                 ? "bg-brand-600 text-white"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
             }`}
           >
             Все
@@ -63,7 +73,7 @@ export default function HomePage() {
               className={`rounded-full px-3 py-1 text-sm font-medium transition-colors ${
                 category === cat
                   ? "bg-brand-600 text-white"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
               }`}
             >
               {cat}

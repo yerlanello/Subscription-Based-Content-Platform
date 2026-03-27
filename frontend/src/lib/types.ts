@@ -91,3 +91,13 @@ export interface Subscription {
   started_at: string;
   ends_at: string | null;
 }
+
+export interface Donation {
+  id: string;
+  donor_id: string;
+  creator_id: string;
+  amount_cents: number;
+  message: string | null;
+  created_at: string;
+  donor?: PublicUser;
+}

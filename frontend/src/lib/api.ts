@@ -140,6 +140,19 @@ export const subscriptionsApi = {
     api.post("/subscriptions/verify-session", { session_id: sessionId }),
 };
 
+// --- Donations ---
+export const donationsApi = {
+  createCheckout: (username: string, data: { amount_cents: number; message?: string }) =>
+    api.post<{ data: { url: string } }>(`/creators/${username}/donate`, data),
+  verify: (sessionId: string) =>
+    api.post("/donations/verify", { session_id: sessionId }),
+};
+
+// --- Following ---
+export const followingApi = {
+  myFollowing: () => api.get("/users/me/following"),
+};
+
 // --- Notifications ---
 export const notificationsApi = {
   list: () => api.get("/notifications"),

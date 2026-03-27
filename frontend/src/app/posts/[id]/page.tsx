@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { formatDistanceToNow } from "date-fns";
 import { ru } from "date-fns/locale";
 import { Heart, Lock, MessageCircle, Trash2 } from "lucide-react";
+import { RenderContent } from "@/components/post/RenderContent";
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -143,9 +144,10 @@ export default function PostPage({ params }: { params: { id: string } }) {
         <h1 className="mb-4 text-2xl font-bold">{post.title}</h1>
 
         {post.content && (
-          <div className="prose max-w-none text-gray-700 whitespace-pre-wrap">
-            {post.content}
-          </div>
+          <RenderContent
+            content={post.content}
+            className="prose max-w-none text-gray-700 dark:text-gray-300"
+          />
         )}
 
         {/* Attachments */}
@@ -168,7 +170,7 @@ export default function PostPage({ params }: { params: { id: string } }) {
         )}
 
         {/* Actions */}
-        <div className="mt-6 flex items-center gap-4 border-t pt-4">
+        <div className="mt-6 flex items-center gap-4 border-t dark:border-gray-700 pt-4">
           {user && (
             <button
               onClick={() => likeMutation.mutate()}
@@ -225,7 +227,7 @@ export default function PostPage({ params }: { params: { id: string } }) {
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={c.author.avatar_url} alt={c.author.username} className="h-8 w-8 shrink-0 rounded-full object-cover" />
                 ) : (
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100 text-sm font-semibold">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700 text-sm font-semibold">
                     {c.author?.username?.[0]?.toUpperCase()}
                   </div>
                 )}
@@ -239,7 +241,7 @@ export default function PostPage({ params }: { params: { id: string } }) {
                       })}
                     </span>
                   </div>
-                  <p className="mt-1 text-sm text-gray-700">{c.content}</p>
+                  <p className="mt-1 text-sm text-gray-700 dark:text-gray-300">{c.content}</p>
                 </div>
                 {user?.id === c.user_id && (
                   <button

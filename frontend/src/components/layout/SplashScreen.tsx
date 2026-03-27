@@ -3,6 +3,7 @@
 export function SplashScreen() {
   return (
     <div
+      className="bg-white dark:bg-gray-950"
       style={{
         position: "fixed",
         inset: 0,
@@ -11,7 +12,6 @@ export function SplashScreen() {
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        background: "#fff",
         gap: "24px",
       }}
     >
@@ -76,6 +76,6 @@ export function SplashScreen() {
       >
         Xabarla
       </p>
-    </div>
+      </div>
   );
 }

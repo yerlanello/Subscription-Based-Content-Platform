@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 
 	"diploma/backend/internal/middleware"
 	"diploma/backend/internal/repository"
@@ -19,14 +20,15 @@ import (
 )
 
 type StripeHandler struct {
-	subRepo     *repository.SubscriptionRepo
-	creatorRepo *repository.CreatorRepo
-	userRepo    *repository.UserRepo
+	subRepo      *repository.SubscriptionRepo
+	creatorRepo  *repository.CreatorRepo
+	userRepo     *repository.UserRepo
+	donationRepo *repository.DonationRepo
 }
 
-func NewStripeHandler(subRepo *repository.SubscriptionRepo, creatorRepo *repository.CreatorRepo, userRepo *repository.UserRepo) *StripeHandler {
+func NewStripeHandler(subRepo *repository.SubscriptionRepo, creatorRepo *repository.CreatorRepo, userRepo *repository.UserRepo, donationRepo *repository.DonationRepo) *StripeHandler {
 	stripe.Key = os.Getenv("STRIPE_SECRET_KEY")
-	return &StripeHandler{subRepo: subRepo, creatorRepo: creatorRepo, userRepo: userRepo}
+	return &StripeHandler{subRepo: subRepo, creatorRepo: creatorRepo, userRepo: userRepo, donationRepo: donationRepo}
 }
 
 // CreateCheckout — POST /api/creators/{username}/checkout
@@ -146,6 +148,151 @@ func (h *StripeHandler) VerifySession(w http.ResponseWriter, r *http.Request) {
 	response.OK(w, map[string]string{"status": "subscribed"})
 }
 
+// CreateDonationCheckout — POST /api/creators/{username}/donate
+func (h *StripeHandler) CreateDonationCheckout(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r)
+	if claims == nil {
+		response.Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	username := chi.URLParam(r, "username")
+
+	var body struct {
+		AmountCents int    `json:"amount_cents"`
+		Message     string `json:"message"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.AmountCents <= 0 {
+		response.Error(w, http.StatusBadRequest, "amount_cents is required and must be positive")
+		return
+	}
+
+	creatorUser, err := h.userRepo.GetByUsername(r.Context(), username)
+	if err != nil {
+		response.Error(w, http.StatusNotFound, "creator not found")
+		return
+	}
+
+	if creatorUser.ID == claims.UserID {
+		response.Error(w, http.StatusBadRequest, "cannot donate to yourself")
+		return
+	}
+
+	profile, err := h.creatorRepo.GetByUserID(r.Context(), creatorUser.ID)
+	if err != nil {
+		response.Error(w, http.StatusNotFound, "creator profile not found")
+		return
+	}
+
+	frontendURL := os.Getenv("FRONTEND_URL")
+	if frontendURL == "" {
+		frontendURL = "http://localhost:3000"
+	}
+
+	amountTiyn := int64(body.AmountCents) * 100
+
+	params := &stripe.CheckoutSessionParams{
+		Mode: stripe.String(string(stripe.CheckoutSessionModePayment)),
+		LineItems: []*stripe.CheckoutSessionLineItemParams{
+			{
+				PriceData: &stripe.CheckoutSessionLineItemPriceDataParams{
+					Currency:   stripe.String("kzt"),
+					UnitAmount: stripe.Int64(amountTiyn),
+					ProductData: &stripe.CheckoutSessionLineItemPriceDataProductDataParams{
+						Name: stripe.String("Донат для " + profile.DisplayName),
+					},
+				},
+				Quantity: stripe.Int64(1),
+			},
+		},
+		SuccessURL: stripe.String(frontendURL + "/" + username + "?donated=1&session_id={CHECKOUT_SESSION_ID}"),
+		CancelURL:  stripe.String(frontendURL + "/" + username),
+		Metadata: map[string]string{
+			"type":       "donation",
+			"donor_id":   claims.UserID.String(),
+			"creator_id": creatorUser.ID.String(),
+			"amount":     strconv.Itoa(body.AmountCents),
+			"message":    body.Message,
+		},
+	}
+
+	sess, err := session.New(params)
+	if err != nil {
+		log.Printf("stripe donation checkout error: %v", err)
+		response.Error(w, http.StatusInternalServerError, "failed to create checkout session")
+		return
+	}
+
+	response.OK(w, map[string]string{"url": sess.URL})
+}
+
+// VerifyDonation — POST /api/donations/verify
+func (h *StripeHandler) VerifyDonation(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r)
+	if claims == nil {
+		response.Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	var body struct {
+		SessionID string `json:"session_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.SessionID == "" {
+		response.Error(w, http.StatusBadRequest, "session_id required")
+		return
+	}
+
+	exists, err := h.donationRepo.ExistsBySessionID(r.Context(), body.SessionID)
+	if err == nil && exists {
+		response.OK(w, map[string]string{"status": "ok"})
+		return
+	}
+
+	sess, err := session.Get(body.SessionID, nil)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid session")
+		return
+	}
+
+	if sess.PaymentStatus != stripe.CheckoutSessionPaymentStatusPaid {
+		response.Error(w, http.StatusPaymentRequired, "payment not completed")
+		return
+	}
+
+	if sess.Metadata["type"] != "donation" {
+		response.Error(w, http.StatusBadRequest, "invalid session type")
+		return
+	}
+
+	donorID, err1 := uuid.Parse(sess.Metadata["donor_id"])
+	creatorID, err2 := uuid.Parse(sess.Metadata["creator_id"])
+	amountCents, err3 := strconv.Atoi(sess.Metadata["amount"])
+	if err1 != nil || err2 != nil || err3 != nil {
+		response.Error(w, http.StatusBadRequest, "invalid session metadata")
+		return
+	}
+
+	if donorID != claims.UserID {
+		response.Error(w, http.StatusForbidden, "forbidden")
+		return
+	}
+
+	msg := sess.Metadata["message"]
+	var msgPtr *string
+	if msg != "" {
+		msgPtr = &msg
+	}
+	sessionID := body.SessionID
+
+	if _, err := h.donationRepo.Create(r.Context(), donorID, creatorID, amountCents, msgPtr, &sessionID); err != nil {
+		log.Printf("donation create error: %v", err)
+		response.Error(w, http.StatusInternalServerError, "failed to record donation")
+		return
+	}
+
+	response.OK(w, map[string]string{"status": "ok"})
+}
+
 // Webhook — POST /api/webhooks/stripe
 // Обрабатывает события от Stripe (checkout.session.completed → создаём подписку)
 func (h *StripeHandler) Webhook(w http.ResponseWriter, r *http.Request) {
@@ -184,18 +331,40 @@ func (h *StripeHandler) Webhook(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		patronID, err1 := uuid.Parse(sess.Metadata["patron_id"])
-		creatorID, err2 := uuid.Parse(sess.Metadata["creator_id"])
-		if err1 != nil || err2 != nil {
-			log.Printf("stripe: invalid metadata patron=%s creator=%s", sess.Metadata["patron_id"], sess.Metadata["creator_id"])
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-
-		if _, err := h.subRepo.Subscribe(r.Context(), patronID, creatorID); err != nil {
-			log.Printf("stripe: failed to create subscription: %v", err)
+		if sess.Metadata["type"] == "donation" {
+			donorID, err1 := uuid.Parse(sess.Metadata["donor_id"])
+			creatorID, err2 := uuid.Parse(sess.Metadata["creator_id"])
+			amountCents, err3 := strconv.Atoi(sess.Metadata["amount"])
+			if err1 != nil || err2 != nil || err3 != nil {
+				log.Printf("stripe: invalid donation metadata")
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+			msg := sess.Metadata["message"]
+			var msgPtr *string
+			if msg != "" {
+				msgPtr = &msg
+			}
+			sid := sess.ID
+			if _, err := h.donationRepo.Create(r.Context(), donorID, creatorID, amountCents, msgPtr, &sid); err != nil {
+				log.Printf("stripe: failed to create donation: %v", err)
+			} else {
+				log.Printf("stripe: donation recorded donor=%s creator=%s amount=%d", donorID, creatorID, amountCents)
+			}
 		} else {
-			log.Printf("stripe: subscription created patron=%s creator=%s", patronID, creatorID)
+			patronID, err1 := uuid.Parse(sess.Metadata["patron_id"])
+			creatorID, err2 := uuid.Parse(sess.Metadata["creator_id"])
+			if err1 != nil || err2 != nil {
+				log.Printf("stripe: invalid metadata patron=%s creator=%s", sess.Metadata["patron_id"], sess.Metadata["creator_id"])
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+
+			if _, err := h.subRepo.Subscribe(r.Context(), patronID, creatorID); err != nil {
+				log.Printf("stripe: failed to create subscription: %v", err)
+			} else {
+				log.Printf("stripe: subscription created patron=%s creator=%s", patronID, creatorID)
+			}
 		}
 	}
 

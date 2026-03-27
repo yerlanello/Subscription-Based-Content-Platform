@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+
 type SubscriptionRepo struct {
 	db *pgxpool.Pool
 }
@@ -116,6 +117,39 @@ func (r *FollowRepo) IsFollowing(ctx context.Context, followerID, creatorID uuid
 		SELECT EXISTS(SELECT 1 FROM follows WHERE follower_id = $1 AND creator_id = $2)
 	`, followerID, creatorID).Scan(&exists)
 	return exists, err
+}
+
+func (r *FollowRepo) GetFollowing(ctx context.Context, followerID uuid.UUID) ([]models.CreatorWithProfile, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT u.id, u.username, u.email, u.role, u.avatar_url, u.bio, u.created_at, u.updated_at,
+		       cp.id, cp.user_id, cp.display_name, cp.description, cp.cover_url, cp.category,
+		       cp.subscription_price_cents, cp.subscription_description, cp.created_at, cp.updated_at
+		FROM follows f
+		JOIN users u ON u.id = f.creator_id
+		JOIN creator_profiles cp ON cp.user_id = f.creator_id
+		WHERE f.follower_id = $1
+		ORDER BY f.created_at DESC
+	`, followerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []models.CreatorWithProfile
+	for rows.Next() {
+		var c models.CreatorWithProfile
+		if err := rows.Scan(
+			&c.User.ID, &c.User.Username, &c.User.Email, &c.User.Role,
+			&c.User.AvatarURL, &c.User.Bio, &c.User.CreatedAt, &c.User.UpdatedAt,
+			&c.Profile.ID, &c.Profile.UserID, &c.Profile.DisplayName, &c.Profile.Description,
+			&c.Profile.CoverURL, &c.Profile.Category, &c.Profile.SubscriptionPriceCents,
+			&c.Profile.SubscriptionDescription, &c.Profile.CreatedAt, &c.Profile.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		result = append(result, c)
+	}
+	return result, nil
 }
 
 // helper
