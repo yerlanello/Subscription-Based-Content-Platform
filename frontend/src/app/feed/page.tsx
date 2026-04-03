@@ -52,10 +52,13 @@ export default function FeedPage() {
   });
 
   const { data: exploreData, isLoading: exploreLoading } = useQuery({
-    queryKey: ["explore"],
-    queryFn: () => postsApi.explore({ limit: 20 }).then((r) => r.data.data as Post[]),
+    queryKey: ["explore", !!user],
+    // Authenticated users get personalised recommendations; anonymous get random explore
+    queryFn: () =>
+      user
+        ? postsApi.recommended({ limit: 20 }).then((r) => r.data.data as Post[])
+        : postsApi.explore({ limit: 20 }).then((r) => r.data.data as Post[]),
     enabled: tab === "explore",
-    // shuffle on every tab open
     staleTime: 0,
   });
 

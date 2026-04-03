@@ -239,6 +239,50 @@ func (r *PostRepo) Explore(ctx context.Context, limit, offset int) ([]models.Pos
 	return scanPostsWithCountsAndCreator(rows)
 }
 
+// GetByIDs fetches published posts by a list of IDs (from Milvus ANN search),
+// re-ranked by popularity + recency score.
+func (r *PostRepo) GetByIDs(ctx context.Context, candidateIDs []string, limit, offset int) ([]models.Post, error) {
+	uuids := make([]uuid.UUID, 0, len(candidateIDs))
+	for _, s := range candidateIDs {
+		u, err := uuid.Parse(s)
+		if err == nil {
+			uuids = append(uuids, u)
+		}
+	}
+	if len(uuids) == 0 {
+		return nil, nil
+	}
+	rows, err := r.db.Query(ctx, `
+		SELECT p.id, p.creator_id, p.title, p.content, p.type, p.is_free, p.is_published,
+		       p.is_pinned, p.published_at, p.created_at, p.updated_at,
+		       (SELECT COUNT(*) FROM likes    WHERE post_id = p.id) AS likes_count,
+		       (SELECT COUNT(*) FROM comments WHERE post_id = p.id) AS comments_count,
+		       u.id, u.username, u.avatar_url
+		FROM posts p
+		JOIN users u ON u.id = p.creator_id
+		WHERE p.id = ANY($1) AND p.is_published = true
+		ORDER BY
+		    (SELECT COUNT(*) FROM likes WHERE post_id = p.id) * 2 +
+		    GREATEST(0, 30 - EXTRACT(DAY FROM NOW() - p.published_at)::int) DESC
+		LIMIT $2 OFFSET $3
+	`, uuids, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanPostsWithCountsAndCreator(rows)
+}
+
+// RecordView upserts a post view for a user (used for future signals).
+func (r *PostRepo) RecordView(ctx context.Context, userID, postID uuid.UUID) error {
+	_, err := r.db.Exec(ctx, `
+		INSERT INTO post_views (user_id, post_id)
+		VALUES ($1, $2)
+		ON CONFLICT (user_id, post_id) DO UPDATE SET viewed_at = NOW()
+	`, userID, postID)
+	return err
+}
+
 // LikesCount
 func (r *PostRepo) LikesCount(ctx context.Context, postID uuid.UUID) (int, error) {
 	var count int

@@ -10,6 +10,7 @@ import (
 	"diploma/backend/internal/handlers"
 	"diploma/backend/internal/hub"
 	"diploma/backend/internal/middleware"
+	"diploma/backend/internal/recommendation"
 	"diploma/backend/internal/repository"
 	"diploma/backend/internal/service"
 	"diploma/backend/internal/storage"
@@ -78,11 +79,31 @@ func main() {
 	authSvc := service.NewAuthService(userRepo, jwtSecret)
 	postSvc := service.NewPostService(postRepo, subRepo, notifRepo, notifHub)
 
+	// Recommendation system (optional — degrades gracefully if unavailable)
+	var recSvc *recommendation.Service
+	milvusAddr := os.Getenv("MILVUS_ADDR")
+	embeddingURL := os.Getenv("EMBEDDING_URL")
+	if milvusAddr == "" {
+		milvusAddr = "localhost:19530"
+	}
+	if embeddingURL == "" {
+		embeddingURL = "http://localhost:8001"
+	}
+	milvusClient, err := recommendation.NewMilvusClient(ctx, milvusAddr)
+	if err != nil {
+		log.Printf("warn: milvus unavailable, recommendations disabled: %v", err)
+	} else {
+		embClient := recommendation.NewEmbeddingClient(embeddingURL)
+		recSvc = recommendation.NewService(milvusClient, embClient, postRepo, creatorRepo)
+		log.Printf("recommendation system ready")
+		defer milvusClient.Close()
+	}
+
 	// Handlers
 	authH := handlers.NewAuthHandler(authSvc)
 	userH := handlers.NewUserHandler(userRepo, minioStorage)
 	creatorH := handlers.NewCreatorHandler(creatorRepo, userRepo, subRepo, followRepo, minioStorage)
-	postH := handlers.NewPostHandler(postSvc, commentRepo, userRepo, postRepo, minioStorage)
+	postH := handlers.NewPostHandler(postSvc, commentRepo, userRepo, postRepo, minioStorage, recSvc)
 	notifH := handlers.NewNotificationHandler(notifRepo, notifHub)
 	stripeH := handlers.NewStripeHandler(subRepo, creatorRepo, userRepo, donationRepo)
 	billingH := handlers.NewBillingHandler(subRepo, donationRepo)
@@ -161,6 +182,7 @@ func main() {
 		r.Route("/posts", func(r chi.Router) {
 			r.With(authMiddleware).Get("/feed", postH.Feed)
 			r.With(optionalAuth).Get("/explore", postH.Explore)
+			r.With(authMiddleware).Get("/recommended", postH.Recommended)
 			r.With(authMiddleware).Post("/", postH.Create)
 			r.With(optionalAuth).Get("/{id}", postH.Get)
 			r.With(authMiddleware).Put("/{id}", postH.Update)

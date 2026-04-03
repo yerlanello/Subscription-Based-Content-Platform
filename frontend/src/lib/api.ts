@@ -177,6 +177,8 @@ export const postsApi = {
     api.get("/posts/feed", { params }),
   explore: (params?: { limit?: number; offset?: number }) =>
     api.get("/posts/explore", { params }),
+  recommended: (params?: { limit?: number; offset?: number }) =>
+    api.get("/posts/recommended", { params }),
   get: (id: string) => api.get(`/posts/${id}`),
   create: (data: {
     title: string;

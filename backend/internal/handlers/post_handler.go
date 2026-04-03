@@ -9,8 +9,11 @@ import (
 	"strconv"
 	"strings"
 
+	"context"
+
 	"diploma/backend/internal/middleware"
 	"diploma/backend/internal/models"
+	"diploma/backend/internal/recommendation"
 	"diploma/backend/internal/repository"
 	"diploma/backend/internal/response"
 	"diploma/backend/internal/service"
@@ -25,10 +28,11 @@ type PostHandler struct {
 	userRepo    *repository.UserRepo
 	postRepo    *repository.PostRepo
 	storage     *storage.MinioStorage
+	recSvc      *recommendation.Service // nil if rec system is unavailable
 }
 
-func NewPostHandler(postSvc *service.PostService, commentRepo *repository.CommentRepo, userRepo *repository.UserRepo, postRepo *repository.PostRepo, storage *storage.MinioStorage) *PostHandler {
-	return &PostHandler{postSvc: postSvc, commentRepo: commentRepo, userRepo: userRepo, postRepo: postRepo, storage: storage}
+func NewPostHandler(postSvc *service.PostService, commentRepo *repository.CommentRepo, userRepo *repository.UserRepo, postRepo *repository.PostRepo, storage *storage.MinioStorage, recSvc *recommendation.Service) *PostHandler {
+	return &PostHandler{postSvc: postSvc, commentRepo: commentRepo, userRepo: userRepo, postRepo: postRepo, storage: storage, recSvc: recSvc}
 }
 
 func (h *PostHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -165,6 +169,10 @@ func (h *PostHandler) Publish(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	// Index post vector in background — never blocks the response
+	if h.recSvc != nil {
+		go h.recSvc.IndexPost(context.Background(), post)
+	}
 	response.OK(w, post)
 }
 
@@ -247,6 +255,30 @@ func (h *PostHandler) Explore(w http.ResponseWriter, r *http.Request) {
 	response.OK(w, posts)
 }
 
+func (h *PostHandler) Recommended(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r)
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	if limit <= 0 || limit > 50 {
+		limit = 20
+	}
+
+	if h.recSvc != nil {
+		posts, err := h.recSvc.Recommend(r.Context(), claims.UserID, limit, offset)
+		if err == nil {
+			response.OK(w, posts)
+			return
+		}
+	}
+	// Fallback: plain random explore
+	posts, err := h.postRepo.Explore(r.Context(), limit, offset)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	response.OK(w, posts)
+}
+
 func (h *PostHandler) Like(w http.ResponseWriter, r *http.Request) {
 	claims := middleware.GetClaims(r)
 	postID, err := uuid.Parse(r.PathValue("id"))
@@ -257,6 +289,9 @@ func (h *PostHandler) Like(w http.ResponseWriter, r *http.Request) {
 	if err := h.postSvc.Like(r.Context(), postID, claims.UserID); err != nil {
 		response.Error(w, http.StatusInternalServerError, "internal error")
 		return
+	}
+	if h.recSvc != nil {
+		go h.recSvc.OnLike(context.Background(), claims.UserID, postID)
 	}
 	response.NoContent(w)
 }
