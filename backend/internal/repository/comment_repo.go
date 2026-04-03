@@ -45,7 +45,8 @@ func (r *CommentRepo) GetByPost(ctx context.Context, postID uuid.UUID) ([]models
 	}
 	defer rows.Close()
 
-	var comments []models.Comment
+	// Fetch flat list
+	var all []models.Comment
 	for rows.Next() {
 		var c models.Comment
 		c.Author = &models.PublicUser{}
@@ -55,9 +56,42 @@ func (r *CommentRepo) GetByPost(ctx context.Context, postID uuid.UUID) ([]models
 		); err != nil {
 			return nil, err
 		}
-		comments = append(comments, c)
+		all = append(all, c)
 	}
-	return comments, nil
+
+	// Map id → pointer into all slice
+	byID := make(map[uuid.UUID]*models.Comment, len(all))
+	for i := range all {
+		byID[all[i].ID] = &all[i]
+	}
+
+	// Flatten: walk up parent chain to find root, then attach there
+	for i := range all {
+		if all[i].ParentID == nil {
+			continue
+		}
+		parentID := *all[i].ParentID
+		for {
+			parent, ok := byID[parentID]
+			if !ok {
+				break
+			}
+			if parent.ParentID == nil {
+				// parent is root — attach here
+				parent.Replies = append(parent.Replies, all[i])
+				break
+			}
+			parentID = *parent.ParentID
+		}
+	}
+
+	var result []models.Comment
+	for i := range all {
+		if all[i].ParentID == nil {
+			result = append(result, *byID[all[i].ID])
+		}
+	}
+	return result, nil
 }
 
 func (r *CommentRepo) Delete(ctx context.Context, id, userID uuid.UUID) error {

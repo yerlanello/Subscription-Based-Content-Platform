@@ -8,18 +8,19 @@ import { useAuth } from "@/hooks/useAuth";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useState } from "react";
-
-const schema = z.object({
-  email: z.string().email("Неверный email"),
-  password: z.string().min(1, "Введите пароль"),
-});
-
-type Form = z.infer<typeof schema>;
+import { useT } from "@/hooks/useT";
 
 export default function LoginPage() {
   const { login } = useAuth();
   const router = useRouter();
+  const t = useT();
   const [serverError, setServerError] = useState("");
+
+  const schema = z.object({
+    email: z.string().email("Неверный email"),
+    password: z.string().min(1, "Введите пароль"),
+  });
+  type Form = z.infer<typeof schema>;
 
   const {
     register,
@@ -36,24 +37,24 @@ export default function LoginPage() {
       router.push("/feed");
     } catch (err: unknown) {
       const e = err as { response?: { data?: { error?: string } } };
-      setServerError(e.response?.data?.error ?? "Ошибка входа");
+      setServerError(e.response?.data?.error ?? t.auth.loginError);
     }
   };
 
   return (
     <div className="flex min-h-[80vh] items-center justify-center px-4">
       <div className="card w-full max-w-md p-8">
-        <h1 className="mb-6 text-2xl font-bold">Вход</h1>
+        <h1 className="mb-6 text-2xl font-bold">{t.auth.loginTitle}</h1>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
-            <label className="mb-1 block text-sm font-medium">Email</label>
+            <label className="mb-1 block text-sm font-medium">{t.auth.email}</label>
             <input className="input" type="email" placeholder="you@example.com" {...register("email")} />
             {errors.email && <p className="mt-1 text-xs text-red-500">{errors.email.message}</p>}
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium">Пароль</label>
+            <label className="mb-1 block text-sm font-medium">{t.auth.password}</label>
             <input className="input" type="password" placeholder="••••••••" {...register("password")} />
             {errors.password && <p className="mt-1 text-xs text-red-500">{errors.password.message}</p>}
           </div>
@@ -63,14 +64,14 @@ export default function LoginPage() {
           )}
 
           <button type="submit" disabled={isSubmitting} className="btn-primary w-full">
-            {isSubmitting ? "Входим..." : "Войти"}
+            {isSubmitting ? t.auth.loggingIn : t.auth.login}
           </button>
         </form>
 
         <p className="mt-4 text-center text-sm text-gray-500">
-          Нет аккаунта?{" "}
+          {t.auth.noAccount}{" "}
           <Link href="/register" className="text-brand-600 hover:underline">
-            Зарегистрироваться
+            {t.auth.loginLink}
           </Link>
         </p>
       </div>

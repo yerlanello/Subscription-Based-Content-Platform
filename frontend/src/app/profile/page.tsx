@@ -8,10 +8,14 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
-import { ru } from "date-fns/locale";
+import { ru as ruLocale, enUS, kk as kkLocale } from "date-fns/locale";
 import { LayoutDashboard, PlusCircle, Eye, EyeOff, Settings } from "lucide-react";
 import { BecomeCreatorModal } from "@/components/creator/BecomeCreatorModal";
 import { formatPrice } from "@/lib/auth";
+import { useT } from "@/hooks/useT";
+import { useLocaleStore } from "@/store/localeStore";
+
+const dateFnsLocales = { ru: ruLocale, en: enUS, kk: kkLocale };
 
 export default function ProfilePage() {
   const { user, isLoading } = useAuth();
@@ -19,6 +23,9 @@ export default function ProfilePage() {
   const [showModal, setShowModal] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const queryClient = useQueryClient();
+  const t = useT();
+  const locale = useLocaleStore((s) => s.locale);
+  const dateLocale = dateFnsLocales[locale];
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -32,7 +39,7 @@ export default function ProfilePage() {
       await usersApi.updateMe({ avatar_url: avatarUrl });
       queryClient.invalidateQueries({ queryKey: ["me"] });
     } catch {
-      alert("Не удалось загрузить аватар");
+      alert(t.profile.uploadAvatarError);
     } finally {
       setAvatarUploading(false);
       e.target.value = "";
@@ -63,7 +70,7 @@ export default function ProfilePage() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
-      {/* Шапка профиля */}
+      {/* Profile header */}
       <div className="card mb-6">
         {/* Cover */}
         <div className="h-36 overflow-hidden rounded-t-2xl bg-gradient-to-r from-brand-500 to-purple-600">
@@ -91,8 +98,9 @@ export default function ProfilePage() {
               )}
               <button
                 onClick={() => document.getElementById("avatar-input")?.click()}
+                disabled={avatarUploading}
                 className="absolute bottom-0 right-0 flex h-6 w-6 items-center justify-center rounded-full bg-brand-600 text-white shadow hover:bg-brand-700"
-                title="Сменить аватар"
+                title={t.profile.changeAvatar}
               >
                 <Settings size={12} />
               </button>
@@ -109,7 +117,7 @@ export default function ProfilePage() {
               <div className="flex gap-2">
                 <Link href="/dashboard" className="btn-outline text-sm">
                   <LayoutDashboard size={14} />
-                  Кабинет
+                  {t.profile.cabinet}
                 </Link>
                 <Link href="/dashboard/settings" className="btn-ghost text-sm">
                   <Settings size={14} />
@@ -130,45 +138,43 @@ export default function ProfilePage() {
           {isCreator && creator?.profile.subscription_price_cents !== undefined && (
             <p className="mt-2 text-sm font-medium text-brand-600">
               {creator.profile.subscription_price_cents === 0
-                ? "Бесплатная подписка"
-                : `${formatPrice(creator.profile.subscription_price_cents)} / мес`}
+                ? t.creator.freeSubscription
+                : formatPrice(creator.profile.subscription_price_cents, t.billing.perMonth)}
             </p>
           )}
         </div>
       </div>
 
-      {/* Не автор — предложение стать автором */}
+      {/* Not a creator — prompt to become one */}
       {!isCreator && (
         <div className="card flex flex-col items-center gap-4 py-14 text-center">
           <div className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-50">
             <PlusCircle size={28} className="text-brand-500" />
           </div>
           <div>
-            <p className="text-lg font-semibold">Станьте автором</p>
-            <p className="mt-1 text-sm text-gray-500">
-              Создайте профиль автора, публикуйте контент и получайте поддержку подписчиков
-            </p>
+            <p className="text-lg font-semibold">{t.profile.becomeCreator}</p>
+            <p className="mt-1 text-sm text-gray-500">{t.profile.becomeCreatorHint}</p>
           </div>
           <button onClick={() => setShowModal(true)} className="btn-primary">
-            Стать автором
+            {t.profile.becomeCreator}
           </button>
         </div>
       )}
 
-      {/* Автор — последние посты */}
+      {/* Creator — recent posts */}
       {isCreator && (
         <div className="card overflow-hidden">
           <div className="flex items-center justify-between border-b px-5 py-4">
-            <h2 className="font-semibold">Мои посты</h2>
+            <h2 className="font-semibold">{t.profile.myPosts}</h2>
             <Link href="/dashboard/posts/new" className="btn-primary text-sm">
               <PlusCircle size={14} />
-              Новый пост
+              {t.profile.newPost}
             </Link>
           </div>
 
           {!posts || posts.length === 0 ? (
             <div className="px-5 py-12 text-center text-sm text-gray-400">
-              Постов пока нет. Создайте первый!
+              {t.profile.noPosts}
             </div>
           ) : (
             <ul className="divide-y">
@@ -183,18 +189,18 @@ export default function ProfilePage() {
                     </Link>
                     <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-400">
                       <span className={post.is_free ? "text-green-600" : "text-brand-500"}>
-                        {post.is_free ? "Бесплатно" : "Платно"}
+                        {post.is_free ? t.post.free : t.post.paid}
                       </span>
                       <span>·</span>
                       <span>
                         {formatDistanceToNow(new Date(post.created_at), {
                           addSuffix: true,
-                          locale: ru,
+                          locale: dateLocale,
                         })}
                       </span>
                     </div>
                   </div>
-                  <span title={post.is_published ? "Опубликован" : "Черновик"}>
+                  <span title={post.is_published ? t.dashboard.published : t.post.draft}>
                     {post.is_published ? (
                       <Eye size={15} className="text-gray-400" />
                     ) : (
@@ -209,7 +215,7 @@ export default function ProfilePage() {
           {posts && posts.length > 0 && (
             <div className="border-t px-5 py-3 text-center">
               <Link href="/dashboard" className="text-sm text-brand-600 hover:underline">
-                Все посты в кабинете →
+                {t.profile.allPosts}
               </Link>
             </div>
           )}

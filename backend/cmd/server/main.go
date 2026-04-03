@@ -81,10 +81,11 @@ func main() {
 	// Handlers
 	authH := handlers.NewAuthHandler(authSvc)
 	userH := handlers.NewUserHandler(userRepo, minioStorage)
-	creatorH := handlers.NewCreatorHandler(creatorRepo, userRepo, subRepo, followRepo)
-	postH := handlers.NewPostHandler(postSvc, commentRepo, userRepo, minioStorage)
+	creatorH := handlers.NewCreatorHandler(creatorRepo, userRepo, subRepo, followRepo, minioStorage)
+	postH := handlers.NewPostHandler(postSvc, commentRepo, userRepo, postRepo, minioStorage)
 	notifH := handlers.NewNotificationHandler(notifRepo, notifHub)
 	stripeH := handlers.NewStripeHandler(subRepo, creatorRepo, userRepo, donationRepo)
+	billingH := handlers.NewBillingHandler(subRepo, donationRepo)
 
 	// Router
 	r := chi.NewRouter()
@@ -118,6 +119,7 @@ func main() {
 			r.With(authMiddleware).Post("/me/avatar", userH.UploadAvatar)
 			r.With(authMiddleware).Get("/me/subscriptions", creatorH.MySubscriptions)
 			r.With(authMiddleware).Get("/me/following", creatorH.MyFollowing)
+			r.With(authMiddleware).Get("/me/billing", billingH.History)
 			r.Get("/{username}", userH.GetByUsername)
 		})
 
@@ -133,6 +135,7 @@ func main() {
 			r.With(authMiddleware).Delete("/{username}/follow", creatorH.Unfollow)
 			r.With(optionalAuth).Get("/{username}/posts", postH.ListByCreator)
 			r.With(authMiddleware).Post("/{username}/checkout", stripeH.CreateCheckout)
+			r.With(authMiddleware).Post("/{username}/cover", creatorH.UploadCover)
 		})
 
 		// Stripe webhook (no auth — Stripe подписывает запрос своей подписью)
@@ -157,6 +160,7 @@ func main() {
 		// Posts
 		r.Route("/posts", func(r chi.Router) {
 			r.With(authMiddleware).Get("/feed", postH.Feed)
+			r.With(optionalAuth).Get("/explore", postH.Explore)
 			r.With(authMiddleware).Post("/", postH.Create)
 			r.With(optionalAuth).Get("/{id}", postH.Get)
 			r.With(authMiddleware).Put("/{id}", postH.Update)
@@ -170,6 +174,8 @@ func main() {
 			r.With(authMiddleware).Delete("/{id}/comments/{commentId}", postH.DeleteComment)
 			r.With(authMiddleware).Post("/{id}/attachments", postH.UploadAttachment)
 			r.With(authMiddleware).Delete("/{id}/attachments/{attachmentId}", postH.DeleteAttachment)
+			r.With(authMiddleware).Post("/{id}/pin", postH.PinPost)
+			r.With(authMiddleware).Delete("/{id}/pin", postH.UnpinPost)
 		})
 	})
 

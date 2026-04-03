@@ -132,6 +132,10 @@ export const creatorsApi = {
     api.get(`/creators/${username}/posts`, { params }),
   createCheckout: (username: string) =>
     api.post<{ data: { url: string } }>(`/creators/${username}/checkout`),
+  uploadCover: (username: string, formData: FormData) =>
+    api.post(`/creators/${username}/cover`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    }),
 };
 
 // --- Subscriptions ---
@@ -153,6 +157,11 @@ export const followingApi = {
   myFollowing: () => api.get("/users/me/following"),
 };
 
+// --- Billing ---
+export const billingApi = {
+  history: () => api.get("/users/me/billing"),
+};
+
 // --- Notifications ---
 export const notificationsApi = {
   list: () => api.get("/notifications"),
@@ -166,6 +175,8 @@ export const notificationsApi = {
 export const postsApi = {
   feed: (params?: { limit?: number; offset?: number }) =>
     api.get("/posts/feed", { params }),
+  explore: (params?: { limit?: number; offset?: number }) =>
+    api.get("/posts/explore", { params }),
   get: (id: string) => api.get(`/posts/${id}`),
   create: (data: {
     title: string;
@@ -195,4 +206,6 @@ export const postsApi = {
   ) => api.post(`/posts/${id}/comments`, data),
   deleteComment: (postId: string, commentId: string) =>
     api.delete(`/posts/${postId}/comments/${commentId}`),
+  pin: (id: string) => api.post(`/posts/${id}/pin`),
+  unpin: (id: string) => api.delete(`/posts/${id}/pin`),
 };

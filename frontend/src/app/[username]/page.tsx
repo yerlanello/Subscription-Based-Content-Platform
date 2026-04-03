@@ -6,11 +6,22 @@ import { CreatorPage, Post } from "@/lib/types";
 import { useAuth } from "@/hooks/useAuth";
 import { PostCard } from "@/components/post/PostCard";
 import { formatPrice } from "@/lib/auth";
-import { UserCheck, Heart, CreditCard, AlertTriangle, Gift } from "lucide-react";
+import { UserCheck, Heart, CreditCard, AlertTriangle, Gift, Users, BookOpen, Calendar, Pin } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { DonateModal } from "@/components/creator/DonateModal";
+import { useT } from "@/hooks/useT";
+import { useLocaleStore } from "@/store/localeStore";
+import { format } from "date-fns";
+import { ru as ruLocale, enUS, kk as kkLocale } from "date-fns/locale";
+import type { Locale } from "date-fns";
+
+const dateFnsLocales: Record<string, Locale> = { ru: ruLocale, en: enUS, kk: kkLocale };
+
+function formatDate(iso: string, locale: Locale) {
+  return format(new Date(iso), "d MMMM yyyy", { locale });
+}
 
 export default function CreatorProfilePage({
   params,
@@ -21,6 +32,9 @@ export default function CreatorProfilePage({
   const { user, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const t = useT();
+  const locale = useLocaleStore((s) => s.locale);
+  const dateLocale = dateFnsLocales[locale] ?? ruLocale;
 
   useEffect(() => {
     if (!authLoading && !user) router.push("/register");
@@ -43,7 +57,20 @@ export default function CreatorProfilePage({
   const [subscribeError, setSubscribeError] = useState<string | null>(null);
   const [showUnsubscribeModal, setShowUnsubscribeModal] = useState(false);
   const [showDonateModal, setShowDonateModal] = useState(false);
-  const [donateSuccess, setDonateSuccess] = useState(searchParams.get("donated") === "1");
+  const [donateSuccess, setDonateSuccess] = useState(false);
+
+  // Verify donation with backend after Stripe redirect
+  useEffect(() => {
+    const sessionId = searchParams.get("session_id");
+    const donated = searchParams.get("donated");
+    if (donated === "1" && sessionId) {
+      import("@/lib/api").then(({ donationsApi }) => {
+        donationsApi.verify(sessionId).catch(() => {}).finally(() => {
+          setDonateSuccess(true);
+        });
+      });
+    }
+  }, [searchParams]);
 
   const subscribeMutation = useMutation({
     mutationFn: async () => {
@@ -51,7 +78,6 @@ export default function CreatorProfilePage({
       if (creator!.is_subscribed) {
         return creatorsApi.unsubscribe(username);
       }
-      // Платная подписка — редирект на Stripe
       if (creator!.profile.subscription_price_cents > 0) {
         const res = await creatorsApi.createCheckout(username);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -60,7 +86,6 @@ export default function CreatorProfilePage({
         window.location.href = url;
         return;
       }
-      // Бесплатная подписка — сразу
       return creatorsApi.subscribe(username);
     },
     onSuccess: () =>
@@ -84,14 +109,14 @@ export default function CreatorProfilePage({
   if (isLoading) {
     return (
       <div className="mx-auto max-w-4xl px-4 py-8">
-        <div className="h-48 animate-pulse rounded-xl bg-gray-200" />
+        <div className="h-48 animate-pulse rounded-xl bg-gray-200 dark:bg-gray-800" />
       </div>
     );
   }
 
   if (!creator) {
     return (
-      <div className="py-20 text-center text-gray-400">Автор не найден</div>
+      <div className="py-20 text-center text-gray-400">{t.creator.notFound}</div>
     );
   }
 
@@ -108,11 +133,10 @@ export default function CreatorProfilePage({
             <img
               src={creator.profile.cover_url}
               alt="cover"
-              className="h-full w-full object-cover"
+              className="h-48 w-full object-cover block"
             />
           )}
         </div>
-        {/* Avatar — вне overflow контейнера */}
         <div className="absolute -bottom-12 left-6">
           {creator.user.avatar_url ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -139,6 +163,25 @@ export default function CreatorProfilePage({
               {creator.profile.category}
             </span>
           )}
+
+          {/* Счётчики и дата */}
+          <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
+            <span className="flex items-center gap-1.5">
+              <Users size={14} className="text-brand-500" />
+              <strong className="text-gray-900 dark:text-gray-100">{creator.subscriber_count ?? 0}</strong>
+              {t.creator.subscribers}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <BookOpen size={14} className="text-brand-500" />
+              <strong className="text-gray-900 dark:text-gray-100">{creator.follower_count ?? 0}</strong>
+              {t.creator.followers}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Calendar size={14} />
+              {t.creator.memberSince} {formatDate(creator.user.created_at, dateLocale)}
+            </span>
+          </div>
+
           {creator.profile.description && (
             <p className="mt-3 max-w-lg text-gray-700 dark:text-gray-300">{creator.profile.description}</p>
           )}
@@ -153,7 +196,7 @@ export default function CreatorProfilePage({
                 className="btn-outline min-w-[160px]"
               >
                 <UserCheck size={16} />
-                {subscribeMutation.isPending ? "Загрузка..." : "Отписаться"}
+                {subscribeMutation.isPending ? t.creator.loading : t.creator.unsubscribe}
               </button>
             ) : (
               <button
@@ -163,10 +206,10 @@ export default function CreatorProfilePage({
               >
                 <CreditCard size={16} />
                 {subscribeMutation.isPending
-                  ? "Загрузка..."
+                  ? t.creator.loading
                   : price === 0
-                  ? "Подписаться бесплатно"
-                  : `Подписаться · ${formatPrice(price)}`}
+                  ? t.creator.subscribeFree
+                  : `${t.creator.subscribe} · ${formatPrice(price, t.billing.perMonth)}`}
               </button>
             )}
 
@@ -174,16 +217,14 @@ export default function CreatorProfilePage({
               <p className="text-xs text-red-500 max-w-[200px] text-right">{subscribeError}</p>
             )}
 
-            {/* Donate */}
             <button
               onClick={() => setShowDonateModal(true)}
               className="btn-outline text-sm min-w-[160px]"
             >
               <Gift size={16} />
-              Задонатить
+              {t.creator.donate}
             </button>
 
-            {/* Follow */}
             <button
               onClick={() => followMutation.mutate()}
               disabled={followMutation.isPending}
@@ -193,7 +234,7 @@ export default function CreatorProfilePage({
                 size={14}
                 className={creator.is_following ? "fill-red-500 text-red-500" : ""}
               />
-              {creator.is_following ? "Отписан от уведомлений" : "Следить"}
+              {creator.is_following ? t.creator.unfollow : t.creator.follow}
             </button>
 
             {creator.profile.subscription_description && (
@@ -206,13 +247,21 @@ export default function CreatorProfilePage({
       </div>
 
       {/* Posts */}
-      <h2 className="mb-4 text-lg font-semibold">Посты</h2>
+      <h2 className="mb-4 text-lg font-semibold">{t.creator.posts}</h2>
       {!posts || posts.length === 0 ? (
-        <div className="card p-12 text-center text-gray-400">Постов пока нет</div>
+        <div className="card p-12 text-center text-gray-400">{t.creator.noPosts}</div>
       ) : (
         <div className="space-y-4">
           {posts.map((post) => (
-            <PostCard key={post.id} post={post} />
+            <div key={post.id} className="relative">
+              {post.is_pinned && (
+                <div className="flex items-center gap-1.5 mb-1 text-xs text-brand-500 font-medium px-1">
+                  <Pin size={12} />
+                  {t.post.pinned}
+                </div>
+              )}
+              <PostCard post={post} />
+            </div>
           ))}
         </div>
       )}
@@ -220,7 +269,7 @@ export default function CreatorProfilePage({
       {donateSuccess && (
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-xl bg-green-600 px-5 py-3 text-white shadow-lg">
           <Gift size={18} />
-          <span className="font-medium">Донат отправлен! Спасибо за поддержку 🎉</span>
+          <span className="font-medium">{t.creator.donateSuccess} 🎉</span>
           <button onClick={() => setDonateSuccess(false)} className="ml-2 opacity-70 hover:opacity-100">
             ×
           </button>
@@ -237,19 +286,19 @@ export default function CreatorProfilePage({
 
       {showUnsubscribeModal && (
         <ConfirmModal
-          title="Отписаться от автора?"
+          title={t.creator.unsubscribeTitle}
           message={
             <div className="space-y-3">
               <div className="flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-amber-800">
                 <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-                <span>Денежные средства за текущий период не возвращаются.</span>
+                <span>{t.creator.unsubscribeWarning}</span>
               </div>
-              <p>Вы потеряете доступ ко всем платным постам <strong>{creator.profile.display_name}</strong>.</p>
-              <p className="text-gray-400 text-xs">Автор будет скучать. Может, просто пауза? 🥺</p>
+              <p>{t.creator.unsubscribeAccess} <strong>{creator.profile.display_name}</strong>.</p>
+              <p className="text-gray-400 text-xs">{t.creator.unsubscribeHint}</p>
             </div>
           }
-          confirmLabel="Всё равно отписаться"
-          cancelLabel="Остаться"
+          confirmLabel={t.creator.unsubscribeConfirm}
+          cancelLabel={t.creator.unsubscribeCancel}
           danger
           onConfirm={() => subscribeMutation.mutate()}
           onClose={() => setShowUnsubscribeModal(false)}

@@ -20,7 +20,7 @@ export function clearTokens() {
   localStorage.removeItem(REFRESH_KEY);
 }
 
-export function formatPrice(tenge: number): string {
+export function formatPrice(tenge: number, perMonth?: string): string {
   if (tenge === 0) return "Бесплатно";
-  return `${tenge} ₸/мес`;
+  return perMonth ? `${tenge} ₸ ${perMonth}` : `${tenge} ₸`;
 }

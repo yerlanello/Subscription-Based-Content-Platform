@@ -37,6 +37,8 @@ export interface CreatorPage {
   profile: CreatorProfile;
   is_subscribed: boolean;
   is_following: boolean;
+  subscriber_count: number;
+  follower_count: number;
 }
 
 export interface CreatorWithProfile {
@@ -68,6 +70,7 @@ export interface Post {
   likes_count?: number;
   comments_count?: number;
   is_liked?: boolean;
+  is_pinned?: boolean;
   creator?: PublicUser;
 }
 
@@ -100,4 +103,25 @@ export interface Donation {
   message: string | null;
   created_at: string;
   donor?: PublicUser;
+}
+
+export interface BillingSubscription {
+  id: string;
+  status: SubscriptionStatus;
+  started_at: string;
+  ends_at: string | null;
+  creator_username: string;
+  creator_name: string;
+  creator_avatar: string | null;
+  price_cents: number;
+}
+
+export interface BillingDonation {
+  id: string;
+  amount_cents: number;
+  message: string | null;
+  created_at: string;
+  creator_username: string;
+  creator_name: string;
+  creator_avatar: string | null;
 }

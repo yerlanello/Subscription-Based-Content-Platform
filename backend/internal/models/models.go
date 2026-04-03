@@ -78,16 +78,17 @@ type Post struct {
 	Type        PostType   `json:"type"`
 	IsFree      bool       `json:"is_free"`
 	IsPublished bool       `json:"is_published"`
+	IsPinned    bool       `json:"is_pinned"`
 	PublishedAt *time.Time `json:"published_at"`
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
 
 	// Joined fields
-	Attachments    []PostAttachment `json:"attachments,omitempty"`
-	LikesCount     int              `json:"likes_count,omitempty"`
-	CommentsCount  int              `json:"comments_count,omitempty"`
-	IsLiked        bool             `json:"is_liked,omitempty"`
-	Creator        *PublicUser      `json:"creator,omitempty"`
+	Attachments   []PostAttachment `json:"attachments,omitempty"`
+	LikesCount    int              `json:"likes_count,omitempty"`
+	CommentsCount int              `json:"comments_count,omitempty"`
+	IsLiked       bool             `json:"is_liked,omitempty"`
+	Creator       *PublicUser      `json:"creator,omitempty"`
 }
 
 type PostAttachment struct {
@@ -109,8 +110,8 @@ type Comment struct {
 	UpdatedAt time.Time  `json:"updated_at"`
 
 	// Joined
-	Author   *PublicUser `json:"author,omitempty"`
-	Replies  []Comment   `json:"replies,omitempty"`
+	Author  *PublicUser `json:"author,omitempty"`
+	Replies []Comment   `json:"replies,omitempty"`
 }
 
 type RefreshToken struct {
@@ -121,7 +122,6 @@ type RefreshToken struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// PublicUser — урезанный профиль для публичных ответов
 type PublicUser struct {
 	ID        uuid.UUID `json:"id"`
 	Username  string    `json:"username"`
@@ -137,4 +137,25 @@ type Donation struct {
 	StripeSessionID *string     `json:"stripe_session_id,omitempty"`
 	CreatedAt       time.Time   `json:"created_at"`
 	Donor           *PublicUser `json:"donor,omitempty"`
+}
+
+type BillingSubscription struct {
+	ID              uuid.UUID          `json:"id"`
+	Status          SubscriptionStatus `json:"status"`
+	StartedAt       time.Time          `json:"started_at"`
+	EndsAt          *time.Time         `json:"ends_at"`
+	CreatorUsername string             `json:"creator_username"`
+	CreatorName     string             `json:"creator_name"`
+	CreatorAvatar   *string            `json:"creator_avatar"`
+	PriceCents      int                `json:"price_cents"`
+}
+
+type BillingDonation struct {
+	ID              uuid.UUID `json:"id"`
+	AmountCents     int       `json:"amount_cents"`
+	Message         *string   `json:"message"`
+	CreatedAt       time.Time `json:"created_at"`
+	CreatorUsername string    `json:"creator_username"`
+	CreatorName     string    `json:"creator_name"`
+	CreatorAvatar   *string   `json:"creator_avatar"`
 }

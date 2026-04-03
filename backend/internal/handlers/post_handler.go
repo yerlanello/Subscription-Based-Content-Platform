@@ -23,11 +23,12 @@ type PostHandler struct {
 	postSvc     *service.PostService
 	commentRepo *repository.CommentRepo
 	userRepo    *repository.UserRepo
+	postRepo    *repository.PostRepo
 	storage     *storage.MinioStorage
 }
 
-func NewPostHandler(postSvc *service.PostService, commentRepo *repository.CommentRepo, userRepo *repository.UserRepo, storage *storage.MinioStorage) *PostHandler {
-	return &PostHandler{postSvc: postSvc, commentRepo: commentRepo, userRepo: userRepo, storage: storage}
+func NewPostHandler(postSvc *service.PostService, commentRepo *repository.CommentRepo, userRepo *repository.UserRepo, postRepo *repository.PostRepo, storage *storage.MinioStorage) *PostHandler {
+	return &PostHandler{postSvc: postSvc, commentRepo: commentRepo, userRepo: userRepo, postRepo: postRepo, storage: storage}
 }
 
 func (h *PostHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -232,6 +233,20 @@ func (h *PostHandler) Feed(w http.ResponseWriter, r *http.Request) {
 	response.OK(w, posts)
 }
 
+func (h *PostHandler) Explore(w http.ResponseWriter, r *http.Request) {
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	if limit <= 0 || limit > 50 {
+		limit = 20
+	}
+	posts, err := h.postRepo.Explore(r.Context(), limit, offset)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	response.OK(w, posts)
+}
+
 func (h *PostHandler) Like(w http.ResponseWriter, r *http.Request) {
 	claims := middleware.GetClaims(r)
 	postID, err := uuid.Parse(r.PathValue("id"))
@@ -315,6 +330,47 @@ func (h *PostHandler) DeleteComment(w http.ResponseWriter, r *http.Request) {
 			response.Error(w, http.StatusNotFound, "comment not found")
 			return
 		}
+		response.Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	response.NoContent(w)
+}
+
+func (h *PostHandler) PinPost(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r)
+	postID, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid post id")
+		return
+	}
+	// Verify ownership
+	if _, err := h.postSvc.GetOwn(r.Context(), postID, claims.UserID); err != nil {
+		response.Error(w, http.StatusForbidden, "forbidden")
+		return
+	}
+	if err := h.postRepo.Pin(r.Context(), postID); err != nil {
+		if errors.Is(err, repository.ErrPinLimitReached) {
+			response.Error(w, http.StatusBadRequest, "maximum 3 posts can be pinned")
+			return
+		}
+		response.Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	response.NoContent(w)
+}
+
+func (h *PostHandler) UnpinPost(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r)
+	postID, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid post id")
+		return
+	}
+	if _, err := h.postSvc.GetOwn(r.Context(), postID, claims.UserID); err != nil {
+		response.Error(w, http.StatusForbidden, "forbidden")
+		return
+	}
+	if err := h.postRepo.Unpin(r.Context(), postID); err != nil {
 		response.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}

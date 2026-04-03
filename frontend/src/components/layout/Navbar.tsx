@@ -5,27 +5,45 @@ import { useAuth } from "@/hooks/useAuth";
 import { authApi } from "@/lib/api";
 import { getTokens } from "@/lib/auth";
 import { useRouter, usePathname } from "next/navigation";
-import { User, LayoutDashboard, LogOut, Rss, Home, Moon, Sun, Heart } from "lucide-react";
+import { User, LayoutDashboard, LogOut, Rss, Home, Moon, Sun, Heart, Globe, CreditCard } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { NotificationBell } from "./NotificationBell";
 import { NotificationToasts } from "./NotificationToasts";
 import { useSSENotifications } from "@/hooks/useNotifications";
+import { useLocaleStore } from "@/store/localeStore";
+import { type Locale } from "@/locales";
+import { useT } from "@/hooks/useT";
+
+const LOCALES: { value: Locale; label: string }[] = [
+  { value: "ru", label: "RU" },
+  { value: "en", label: "EN" },
+  { value: "kk", label: "KZ" },
+];
 
 export function Navbar() {
   const { user, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [langOpen, setLangOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const langRef = useRef<HTMLDivElement>(null);
   const { toasts, dismissToast } = useSSENotifications(!!user);
+  const t = useT();
+  const { locale, setLocale } = useLocaleStore();
+
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
+    // Восстанавливаем locale из localStorage
+    const savedLocale = localStorage.getItem("locale") as Locale | null;
+    if (savedLocale && (savedLocale === "ru" || savedLocale === "en" || savedLocale === "kk")) {
+      setLocale(savedLocale);
+    }
     setIsDark(document.documentElement.classList.contains("dark"));
   }, []);
 
   const toggleTheme = () => {
-    // читаем из DOM напрямую, не из state (чтобы не было stale closure)
     const currentlyDark = document.documentElement.classList.contains("dark");
     const newDark = !currentlyDark;
     document.documentElement.classList.toggle("dark", newDark);
@@ -38,19 +56,23 @@ export function Navbar() {
   // Закрываем при смене страницы
   useEffect(() => {
     setMenuOpen(false);
+    setLangOpen(false);
   }, [pathname]);
 
   // Закрываем при клике вне меню
   useEffect(() => {
-    if (!menuOpen) return;
+    if (!menuOpen && !langOpen) return;
     const handleClick = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setMenuOpen(false);
       }
+      if (langRef.current && !langRef.current.contains(e.target as Node)) {
+        setLangOpen(false);
+      }
     };
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
-  }, [menuOpen]);
+  }, [menuOpen, langOpen]);
 
   const handleLogout = async () => {
     const { refreshToken } = getTokens();
@@ -75,22 +97,47 @@ export function Navbar() {
             <>
               <Link href="/" className="btn-ghost hidden sm:flex">
                 <Home size={16} />
-                Авторы
+                {t.nav.authors}
               </Link>
               <Link href="/feed" className="btn-ghost hidden sm:flex">
                 <Rss size={16} />
-                Лента
+                {t.nav.feed}
               </Link>
               <Link href="/following" className="btn-ghost hidden sm:flex">
                 <Heart size={16} />
-                Подписки
+                {t.nav.subscriptions}
               </Link>
               {(user.role === "creator" || user.role === "both") && (
                 <Link href="/dashboard" className="btn-ghost hidden sm:flex">
                   <LayoutDashboard size={16} />
-                  Кабинет
+                  {t.nav.dashboard}
                 </Link>
               )}
+
+              {/* Язык */}
+              <div className="relative hidden sm:block" ref={langRef}>
+                <button
+                  onClick={() => setLangOpen((v) => !v)}
+                  className="btn-ghost p-2 gap-1 text-xs font-semibold"
+                  aria-label="Язык"
+                >
+                  <Globe size={15} />
+                  {locale.toUpperCase()}
+                </button>
+                {langOpen && (
+                  <div className="absolute right-0 mt-2 w-24 rounded-xl border border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg py-1">
+                    {LOCALES.map((l) => (
+                      <button
+                        key={l.value}
+                        onClick={() => { setLocale(l.value); setLangOpen(false); }}
+                        className={`w-full px-4 py-2 text-sm text-left hover:bg-gray-50 dark:hover:bg-gray-800 ${locale === l.value ? "font-bold text-brand-600" : ""}`}
+                      >
+                        {l.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               <button
                 onClick={toggleTheme}
@@ -140,28 +187,35 @@ export function Navbar() {
                       className="flex items-center gap-2 px-4 py-2 text-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800"
                     >
                       <User size={14} />
-                      Мой профиль
+                      {t.nav.profile}
+                    </Link>
+                    <Link
+                      href="/billing"
+                      className="flex items-center gap-2 px-4 py-2 text-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800"
+                    >
+                      <CreditCard size={14} />
+                      {t.nav.paymentHistory}
                     </Link>
                     <Link
                       href="/"
                       className="flex items-center gap-2 px-4 py-2 text-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 sm:hidden"
                     >
                       <Home size={14} />
-                      Авторы
+                      {t.nav.authors}
                     </Link>
                     <Link
                       href="/feed"
                       className="flex items-center gap-2 px-4 py-2 text-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 sm:hidden"
                     >
                       <Rss size={14} />
-                      Лента
+                      {t.nav.feed}
                     </Link>
                     <Link
                       href="/following"
                       className="flex items-center gap-2 px-4 py-2 text-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 sm:hidden"
                     >
                       <Heart size={14} />
-                      Подписки
+                      {t.nav.subscriptions}
                     </Link>
                     {(user.role === "creator" || user.role === "both") && (
                       <Link
@@ -169,16 +223,31 @@ export function Navbar() {
                         className="flex items-center gap-2 px-4 py-2 text-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 sm:hidden"
                       >
                         <LayoutDashboard size={14} />
-                        Кабинет
+                        {t.nav.dashboard}
                       </Link>
                     )}
+                    {/* Язык в мобильном меню */}
+                    <div className="sm:hidden border-t dark:border-gray-700 px-4 py-2">
+                      <p className="text-xs text-gray-400 mb-1">Язык / Language</p>
+                      <div className="flex gap-2">
+                        {LOCALES.map((l) => (
+                          <button
+                            key={l.value}
+                            onClick={() => setLocale(l.value)}
+                            className={`px-2 py-1 text-xs rounded-md ${locale === l.value ? "bg-brand-600 text-white" : "bg-gray-100 dark:bg-gray-800"}`}
+                          >
+                            {l.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                     <hr className="my-1 dark:border-gray-700" />
                     <button
                       onClick={toggleTheme}
                       className="flex w-full items-center gap-2 px-4 py-2 text-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 sm:hidden"
                     >
                       {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
-                      {theme === "dark" ? "Светлая тема" : "Тёмная тема"}
+                      {theme === "dark" ? t.nav.lightTheme : t.nav.darkTheme}
                     </button>
                     <hr className="my-1 dark:border-gray-700" />
                     <button
@@ -186,7 +255,7 @@ export function Navbar() {
                       className="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-600 transition-colors hover:bg-red-50 dark:hover:bg-red-950"
                     >
                       <LogOut size={14} />
-                      Выйти
+                      {t.nav.logout}
                     </button>
                   </div>
                 </div>
@@ -194,6 +263,29 @@ export function Navbar() {
             </>
           ) : (
             <>
+              {/* Язык для неавторизованных */}
+              <div className="relative" ref={langRef}>
+                <button
+                  onClick={() => setLangOpen((v) => !v)}
+                  className="btn-ghost p-2 gap-1 text-xs font-semibold"
+                >
+                  <Globe size={15} />
+                  {locale.toUpperCase()}
+                </button>
+                {langOpen && (
+                  <div className="absolute right-0 mt-2 w-24 rounded-xl border border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg py-1">
+                    {LOCALES.map((l) => (
+                      <button
+                        key={l.value}
+                        onClick={() => { setLocale(l.value); setLangOpen(false); }}
+                        className={`w-full px-4 py-2 text-sm text-left hover:bg-gray-50 dark:hover:bg-gray-800 ${locale === l.value ? "font-bold text-brand-600" : ""}`}
+                      >
+                        {l.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <button
                 onClick={toggleTheme}
                 className="btn-ghost p-2"
@@ -202,10 +294,10 @@ export function Navbar() {
                 {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
               </button>
               <Link href="/login" className="btn-outline">
-                Войти
+                {t.nav.login}
               </Link>
               <Link href="/register" className="btn-primary">
-                Регистрация
+                {t.nav.register}
               </Link>
             </>
           )}

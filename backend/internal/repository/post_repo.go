@@ -24,10 +24,10 @@ func (r *PostRepo) Create(ctx context.Context, creatorID uuid.UUID, title string
 	err := r.db.QueryRow(ctx, `
 		INSERT INTO posts (creator_id, title, content, type, is_free)
 		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, creator_id, title, content, type, is_free, is_published, published_at, created_at, updated_at
+		RETURNING id, creator_id, title, content, type, is_free, is_published, is_pinned, published_at, created_at, updated_at
 	`, creatorID, title, content, postType, isFree).Scan(
 		&post.ID, &post.CreatorID, &post.Title, &post.Content, &post.Type,
-		&post.IsFree, &post.IsPublished, &post.PublishedAt, &post.CreatedAt, &post.UpdatedAt,
+		&post.IsFree, &post.IsPublished, &post.IsPinned, &post.PublishedAt, &post.CreatedAt, &post.UpdatedAt,
 	)
 	return post, err
 }
@@ -36,14 +36,14 @@ func (r *PostRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.Post, err
 	post := &models.Post{}
 	creator := &models.PublicUser{}
 	err := r.db.QueryRow(ctx, `
-		SELECT p.id, p.creator_id, p.title, p.content, p.type, p.is_free, p.is_published, p.published_at, p.created_at, p.updated_at,
+		SELECT p.id, p.creator_id, p.title, p.content, p.type, p.is_free, p.is_published, p.is_pinned, p.published_at, p.created_at, p.updated_at,
 		       u.id, u.username, u.avatar_url
 		FROM posts p
 		JOIN users u ON u.id = p.creator_id
 		WHERE p.id = $1
 	`, id).Scan(
 		&post.ID, &post.CreatorID, &post.Title, &post.Content, &post.Type,
-		&post.IsFree, &post.IsPublished, &post.PublishedAt, &post.CreatedAt, &post.UpdatedAt,
+		&post.IsFree, &post.IsPublished, &post.IsPinned, &post.PublishedAt, &post.CreatedAt, &post.UpdatedAt,
 		&creator.ID, &creator.Username, &creator.AvatarURL,
 	)
 	if err != nil {
@@ -65,10 +65,10 @@ func (r *PostRepo) Update(ctx context.Context, id uuid.UUID, title, content *str
 			is_free = COALESCE($4, is_free),
 			updated_at = NOW()
 		WHERE id = $1
-		RETURNING id, creator_id, title, content, type, is_free, is_published, published_at, created_at, updated_at
+		RETURNING id, creator_id, title, content, type, is_free, is_published, is_pinned, published_at, created_at, updated_at
 	`, id, title, content, isFree).Scan(
 		&post.ID, &post.CreatorID, &post.Title, &post.Content, &post.Type,
-		&post.IsFree, &post.IsPublished, &post.PublishedAt, &post.CreatedAt, &post.UpdatedAt,
+		&post.IsFree, &post.IsPublished, &post.IsPinned, &post.PublishedAt, &post.CreatedAt, &post.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -84,10 +84,10 @@ func (r *PostRepo) Publish(ctx context.Context, id uuid.UUID) (*models.Post, err
 	err := r.db.QueryRow(ctx, `
 		UPDATE posts SET is_published = true, published_at = NOW(), updated_at = NOW()
 		WHERE id = $1
-		RETURNING id, creator_id, title, content, type, is_free, is_published, published_at, created_at, updated_at
+		RETURNING id, creator_id, title, content, type, is_free, is_published, is_pinned, published_at, created_at, updated_at
 	`, id).Scan(
 		&post.ID, &post.CreatorID, &post.Title, &post.Content, &post.Type,
-		&post.IsFree, &post.IsPublished, &post.PublishedAt, &post.CreatedAt, &post.UpdatedAt,
+		&post.IsFree, &post.IsPublished, &post.IsPinned, &post.PublishedAt, &post.CreatedAt, &post.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -103,10 +103,10 @@ func (r *PostRepo) Unpublish(ctx context.Context, id uuid.UUID) (*models.Post, e
 	err := r.db.QueryRow(ctx, `
 		UPDATE posts SET is_published = false, updated_at = NOW()
 		WHERE id = $1
-		RETURNING id, creator_id, title, content, type, is_free, is_published, published_at, created_at, updated_at
+		RETURNING id, creator_id, title, content, type, is_free, is_published, is_pinned, published_at, created_at, updated_at
 	`, id).Scan(
 		&post.ID, &post.CreatorID, &post.Title, &post.Content, &post.Type,
-		&post.IsFree, &post.IsPublished, &post.PublishedAt, &post.CreatedAt, &post.UpdatedAt,
+		&post.IsFree, &post.IsPublished, &post.IsPinned, &post.PublishedAt, &post.CreatedAt, &post.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -128,10 +128,45 @@ func (r *PostRepo) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-// ListByCreator — посты конкретного автора
+var ErrPinLimitReached = errors.New("pin limit reached")
+
+func (r *PostRepo) Pin(ctx context.Context, id uuid.UUID) error {
+	var count int
+	err := r.db.QueryRow(ctx, `
+		SELECT COUNT(*) FROM posts
+		WHERE creator_id = (SELECT creator_id FROM posts WHERE id = $1) AND is_pinned = true
+	`, id).Scan(&count)
+	if err != nil {
+		return err
+	}
+	if count >= 3 {
+		return ErrPinLimitReached
+	}
+	tag, err := r.db.Exec(ctx, `UPDATE posts SET is_pinned = true WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (r *PostRepo) Unpin(ctx context.Context, id uuid.UUID) error {
+	tag, err := r.db.Exec(ctx, `UPDATE posts SET is_pinned = false WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// ListByCreator — посты конкретного автора, закреплённый идёт первым
 func (r *PostRepo) ListByCreator(ctx context.Context, creatorID uuid.UUID, limit, offset int, onlyPublished bool) ([]models.Post, error) {
 	query := `
-		SELECT p.id, p.creator_id, p.title, p.content, p.type, p.is_free, p.is_published, p.published_at, p.created_at, p.updated_at,
+		SELECT p.id, p.creator_id, p.title, p.content, p.type, p.is_free, p.is_published, p.is_pinned, p.published_at, p.created_at, p.updated_at,
 		       (SELECT COUNT(*) FROM likes    WHERE post_id = p.id) AS likes_count,
 		       (SELECT COUNT(*) FROM comments WHERE post_id = p.id) AS comments_count
 		FROM posts p WHERE p.creator_id = $1
@@ -139,7 +174,7 @@ func (r *PostRepo) ListByCreator(ctx context.Context, creatorID uuid.UUID, limit
 	if onlyPublished {
 		query += ` AND p.is_published = true`
 	}
-	query += ` ORDER BY p.created_at DESC LIMIT $2 OFFSET $3`
+	query += ` ORDER BY p.is_pinned DESC, p.created_at DESC LIMIT $2 OFFSET $3`
 
 	rows, err := r.db.Query(ctx, query, creatorID, limit, offset)
 	if err != nil {
@@ -152,7 +187,7 @@ func (r *PostRepo) ListByCreator(ctx context.Context, creatorID uuid.UUID, limit
 // Feed — посты от авторов, на которых подписан пользователь
 func (r *PostRepo) Feed(ctx context.Context, userID uuid.UUID, limit, offset int) ([]models.Post, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT DISTINCT p.id, p.creator_id, p.title, p.content, p.type, p.is_free, p.is_published, p.published_at, p.created_at, p.updated_at,
+		SELECT DISTINCT p.id, p.creator_id, p.title, p.content, p.type, p.is_free, p.is_published, p.is_pinned, p.published_at, p.created_at, p.updated_at,
 		       (SELECT COUNT(*) FROM likes    WHERE post_id = p.id) AS likes_count,
 		       (SELECT COUNT(*) FROM comments WHERE post_id = p.id) AS comments_count,
 		       u.id, u.username, u.avatar_url
@@ -177,6 +212,26 @@ func (r *PostRepo) Feed(ctx context.Context, userID uuid.UUID, limit, offset int
 		ORDER BY p.published_at DESC
 		LIMIT $2 OFFSET $3
 	`, userID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanPostsWithCountsAndCreator(rows)
+}
+
+// Explore — случайные опубликованные посты для ленты рекомендаций
+func (r *PostRepo) Explore(ctx context.Context, limit, offset int) ([]models.Post, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT p.id, p.creator_id, p.title, p.content, p.type, p.is_free, p.is_published, p.is_pinned, p.published_at, p.created_at, p.updated_at,
+		       (SELECT COUNT(*) FROM likes    WHERE post_id = p.id) AS likes_count,
+		       (SELECT COUNT(*) FROM comments WHERE post_id = p.id) AS comments_count,
+		       u.id, u.username, u.avatar_url
+		FROM posts p
+		JOIN users u ON u.id = p.creator_id
+		WHERE p.is_published = true
+		ORDER BY RANDOM()
+		LIMIT $1 OFFSET $2
+	`, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +280,6 @@ func (r *PostRepo) AddAttachment(ctx context.Context, postID uuid.UUID, url, mim
 }
 
 func (r *PostRepo) DeleteAttachment(ctx context.Context, attachmentID, requesterID uuid.UUID) error {
-	// Проверяем что requester — автор поста через JOIN
 	tag, err := r.db.Exec(ctx, `
 		DELETE FROM post_attachments pa
 		USING posts p
@@ -267,7 +321,7 @@ func scanPosts(rows pgx.Rows) ([]models.Post, error) {
 		var p models.Post
 		if err := rows.Scan(
 			&p.ID, &p.CreatorID, &p.Title, &p.Content, &p.Type,
-			&p.IsFree, &p.IsPublished, &p.PublishedAt, &p.CreatedAt, &p.UpdatedAt,
+			&p.IsFree, &p.IsPublished, &p.IsPinned, &p.PublishedAt, &p.CreatedAt, &p.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -282,7 +336,7 @@ func scanPostsWithCounts(rows pgx.Rows) ([]models.Post, error) {
 		var p models.Post
 		if err := rows.Scan(
 			&p.ID, &p.CreatorID, &p.Title, &p.Content, &p.Type,
-			&p.IsFree, &p.IsPublished, &p.PublishedAt, &p.CreatedAt, &p.UpdatedAt,
+			&p.IsFree, &p.IsPublished, &p.IsPinned, &p.PublishedAt, &p.CreatedAt, &p.UpdatedAt,
 			&p.LikesCount, &p.CommentsCount,
 		); err != nil {
 			return nil, err
@@ -299,7 +353,7 @@ func scanPostsWithCountsAndCreator(rows pgx.Rows) ([]models.Post, error) {
 		c := &models.PublicUser{}
 		if err := rows.Scan(
 			&p.ID, &p.CreatorID, &p.Title, &p.Content, &p.Type,
-			&p.IsFree, &p.IsPublished, &p.PublishedAt, &p.CreatedAt, &p.UpdatedAt,
+			&p.IsFree, &p.IsPublished, &p.IsPinned, &p.PublishedAt, &p.CreatedAt, &p.UpdatedAt,
 			&p.LikesCount, &p.CommentsCount,
 			&c.ID, &c.Username, &c.AvatarURL,
 		); err != nil {

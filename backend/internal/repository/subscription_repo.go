@@ -60,6 +60,43 @@ func (r *SubscriptionRepo) IsSubscribed(ctx context.Context, patronID, creatorID
 	return exists, err
 }
 
+func (r *SubscriptionRepo) CountByCreator(ctx context.Context, creatorID uuid.UUID) (int, error) {
+	var count int
+	err := r.db.QueryRow(ctx, `
+		SELECT COUNT(*) FROM subscriptions WHERE creator_id = $1 AND status = 'active'
+	`, creatorID).Scan(&count)
+	return count, err
+}
+
+func (r *SubscriptionRepo) GetBillingHistory(ctx context.Context, patronID uuid.UUID) ([]models.BillingSubscription, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT s.id, s.status, s.started_at, s.ends_at,
+		       u.username, cp.display_name, u.avatar_url, cp.subscription_price_cents
+		FROM subscriptions s
+		JOIN users u ON u.id = s.creator_id
+		JOIN creator_profiles cp ON cp.user_id = s.creator_id
+		WHERE s.patron_id = $1
+		ORDER BY s.started_at DESC
+	`, patronID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []models.BillingSubscription
+	for rows.Next() {
+		var b models.BillingSubscription
+		if err := rows.Scan(
+			&b.ID, &b.Status, &b.StartedAt, &b.EndsAt,
+			&b.CreatorUsername, &b.CreatorName, &b.CreatorAvatar, &b.PriceCents,
+		); err != nil {
+			return nil, err
+		}
+		result = append(result, b)
+	}
+	return result, nil
+}
+
 func (r *SubscriptionRepo) GetByPatron(ctx context.Context, patronID uuid.UUID) ([]models.Subscription, error) {
 	rows, err := r.db.Query(ctx, `
 		SELECT id, patron_id, creator_id, status, started_at, ends_at
@@ -109,6 +146,14 @@ func (r *FollowRepo) Unfollow(ctx context.Context, followerID, creatorID uuid.UU
 		return ErrNotFound
 	}
 	return nil
+}
+
+func (r *FollowRepo) CountByCreator(ctx context.Context, creatorID uuid.UUID) (int, error) {
+	var count int
+	err := r.db.QueryRow(ctx, `
+		SELECT COUNT(*) FROM follows WHERE creator_id = $1
+	`, creatorID).Scan(&count)
+	return count, err
 }
 
 func (r *FollowRepo) IsFollowing(ctx context.Context, followerID, creatorID uuid.UUID) (bool, error) {

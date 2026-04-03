@@ -9,10 +9,12 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Heart } from "lucide-react";
 import Link from "next/link";
+import { useT } from "@/hooks/useT";
 
 export default function FollowingPage() {
   const { user, isLoading: authLoading } = useAuth();
   const router = useRouter();
+  const t = useT();
 
   useEffect(() => {
     if (!authLoading && !user) router.push("/register");
@@ -41,15 +43,15 @@ export default function FollowingPage() {
     <div className="mx-auto max-w-6xl px-4 py-8">
       <div className="mb-8 flex items-center gap-3">
         <Heart size={24} className="text-brand-600" />
-        <h1 className="text-2xl font-bold">Мои подписки</h1>
+        <h1 className="text-2xl font-bold">{t.following.title}</h1>
       </div>
 
       {!data || data.length === 0 ? (
         <div className="card py-20 text-center">
           <Heart size={40} className="mx-auto mb-4 text-gray-300 dark:text-gray-600" />
-          <p className="text-gray-400 mb-4">Вы ещё не следите ни за одним автором</p>
+          <p className="text-gray-400 mb-4">{t.following.empty}</p>
           <Link href="/" className="btn-primary inline-flex">
-            Найти авторов
+            {t.following.findAuthors}
           </Link>
         </div>
       ) : (

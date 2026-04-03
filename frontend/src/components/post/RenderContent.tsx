@@ -5,27 +5,44 @@ import { parseContentWithYouTube } from "@/lib/youtube";
 interface Props {
   content: string;
   className?: string;
-  /** Если true — показывает превью-миниатюру вместо плеера */
   preview?: boolean;
 }
 
-export function RenderContent({ content, className, preview = false }: Props) {
-  const parts = parseContentWithYouTube(content);
+// HTML from TipTap starts with a tag; plain text does not
+function isHTML(str: string) {
+  return /^\s*</.test(str);
+}
 
+export function RenderContent({ content, className, preview = false }: Props) {
+  if (isHTML(content)) {
+    if (preview) {
+      // Strip tags for plain-text preview
+      const plain = content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+      return <p className={className}>{plain}</p>;
+    }
+    return (
+      <div
+        className={`prose prose-sm dark:prose-invert max-w-none break-words ${className ?? ""}`}
+        // TipTap produces safe HTML (no user-controlled script injection path)
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{ __html: content }}
+      />
+    );
+  }
+
+  // Legacy plain-text with YouTube embeds
+  const parts = parseContentWithYouTube(content);
   return (
     <div className={className}>
       {parts.map((part, i) => {
         if (part.type === "youtube") {
           if (preview) {
             return (
-              <div
-                key={i}
-                className="relative my-2 aspect-video w-full overflow-hidden rounded-lg bg-black"
-              >
+              <div key={i} className="relative my-2 aspect-video w-full overflow-hidden rounded-lg bg-black">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={`https://img.youtube.com/vi/${part.videoId}/hqdefault.jpg`}
-                  alt="YouTube видео"
+                  alt="YouTube"
                   className="h-full w-full object-cover opacity-80"
                 />
                 <div className="absolute inset-0 flex items-center justify-center">
@@ -51,7 +68,7 @@ export function RenderContent({ content, className, preview = false }: Props) {
           );
         }
         return part.value ? (
-          <span key={i} className="whitespace-pre-wrap">
+          <span key={i} className="whitespace-pre-wrap break-words">
             {part.value}
           </span>
         ) : null;

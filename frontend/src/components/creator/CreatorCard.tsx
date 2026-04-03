@@ -1,6 +1,9 @@
+"use client";
+
 import Link from "next/link";
 import { CreatorWithProfile } from "@/lib/types";
 import { formatPrice } from "@/lib/auth";
+import { useT } from "@/hooks/useT";
 
 interface Props {
   creator: CreatorWithProfile;
@@ -8,20 +11,21 @@ interface Props {
 
 export function CreatorCard({ creator }: Props) {
   const { user, profile } = creator;
+  const t = useT();
 
   return (
     <Link href={`/${user.username}`} className="card block overflow-hidden hover:shadow-md transition-shadow">
       {/* Cover */}
-      <div className="h-32 bg-gradient-to-r from-brand-500 to-purple-500">
+      <div className="h-32 overflow-hidden bg-gradient-to-r from-brand-500 to-purple-500">
         {profile.cover_url && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={profile.cover_url} alt="" className="h-full w-full object-cover" />
+          <img src={profile.cover_url} alt="" className="h-32 w-full object-cover block" />
         )}
       </div>
 
       {/* Body */}
       <div className="p-4 pt-0">
-        <div className="-mt-8 mb-3">
+        <div className="relative z-10 -mt-8 mb-3">
           {user.avatar_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -51,7 +55,9 @@ export function CreatorCard({ creator }: Props) {
 
         <div className="mt-3 border-t dark:border-gray-700 pt-3">
           <span className="text-sm font-medium text-brand-600">
-            {formatPrice(profile.subscription_price_cents)}
+            {profile.subscription_price_cents === 0
+              ? t.creator.free
+              : formatPrice(profile.subscription_price_cents, t.billing.perMonth)}
           </span>
         </div>
       </div>

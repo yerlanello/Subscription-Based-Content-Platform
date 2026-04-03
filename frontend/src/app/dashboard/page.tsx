@@ -8,10 +8,15 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
-import { ru } from "date-fns/locale";
-import { PlusCircle, Eye, EyeOff, Trash2, Send, Pencil } from "lucide-react";
+import { ru as ruLocale, enUS, kk as kkLocale } from "date-fns/locale";
+import { PlusCircle, Eye, EyeOff, Trash2, Send, Pencil, Pin, PinOff } from "lucide-react";
 import { BecomeCreatorModal } from "@/components/creator/BecomeCreatorModal";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { formatPrice } from "@/lib/auth";
+import { useT } from "@/hooks/useT";
+import { useLocaleStore } from "@/store/localeStore";
+
+const dateFnsLocales = { ru: ruLocale, en: enUS, kk: kkLocale };
 
 export default function DashboardPage() {
   const { user, isLoading } = useAuth();
@@ -19,6 +24,9 @@ export default function DashboardPage() {
   const queryClient = useQueryClient();
   const [showModal, setShowModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const t = useT();
+  const locale = useLocaleStore((s) => s.locale);
+  const dateLocale = dateFnsLocales[locale];
 
   useEffect(() => {
     if (!isLoading && !user) router.push("/login");
@@ -48,6 +56,12 @@ export default function DashboardPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["my-posts"] }),
   });
 
+  const pinMutation = useMutation({
+    mutationFn: ({ id, pinned }: { id: string; pinned: boolean }) =>
+      pinned ? postsApi.unpin(id) : postsApi.pin(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["my-posts"] }),
+  });
+
   if (isLoading || !user) return null;
 
   const isCreator = user.role === "creator" || user.role === "both";
@@ -55,30 +69,30 @@ export default function DashboardPage() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
       <div className="mb-8 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Панель автора</h1>
+        <h1 className="text-2xl font-bold">{t.dashboard.title}</h1>
         {isCreator && (
           <Link href="/dashboard/posts/new" className="btn-primary">
             <PlusCircle size={16} />
-            Новый пост
+            {t.dashboard.newPost}
           </Link>
         )}
       </div>
 
       {!isCreator ? (
         <div className="card flex flex-col items-center gap-4 py-16 text-center">
-          <p className="text-lg font-medium">Вы ещё не стали автором</p>
-          <p className="text-gray-500">Создайте профиль автора чтобы публиковать контент</p>
+          <p className="text-lg font-medium">{t.dashboard.notCreator}</p>
+          <p className="text-gray-500">{t.dashboard.notCreatorHint}</p>
           <button onClick={() => setShowModal(true)} className="btn-primary">
-            Стать автором
+            {t.dashboard.becomeCreator}
           </button>
           {showModal && <BecomeCreatorModal onClose={() => setShowModal(false)} />}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
-          {/* Sidebar — профиль */}
+          {/* Sidebar */}
           <aside className="lg:col-span-1 space-y-4">
             <div className="card p-5">
-              <h2 className="mb-3 font-semibold">Мой профиль</h2>
+              <h2 className="mb-3 font-semibold">{t.dashboard.myProfile}</h2>
               {creator?.profile && (
                 <>
                   <p className="text-sm text-gray-600">{creator.profile.display_name}</p>
@@ -89,8 +103,8 @@ export default function DashboardPage() {
                   )}
                   <p className="mt-2 text-sm font-medium text-brand-600">
                     {creator.profile.subscription_price_cents === 0
-                      ? "Бесплатная подписка"
-                      : `${creator.profile.subscription_price_cents} ₸/мес`}
+                      ? t.creator.freeSubscription
+                      : formatPrice(creator.profile.subscription_price_cents, t.billing.perMonth)}
                   </p>
                 </>
               )}
@@ -98,7 +112,7 @@ export default function DashboardPage() {
                 href="/dashboard/settings"
                 className="btn-outline mt-3 w-full text-sm"
               >
-                Редактировать профиль
+                {t.dashboard.editProfile}
               </Link>
             </div>
           </aside>
@@ -106,47 +120,62 @@ export default function DashboardPage() {
           {/* Posts table */}
           <div className="lg:col-span-2">
             <div className="card overflow-hidden">
-              <div className="border-b px-5 py-4 font-semibold">Мои посты</div>
+              <div className="border-b px-5 py-4 font-semibold">{t.dashboard.myPosts}</div>
               {!posts || posts.length === 0 ? (
                 <div className="px-5 py-12 text-center text-gray-400 text-sm">
-                  Постов пока нет. Создайте первый!
+                  {t.dashboard.noPosts}
                 </div>
               ) : (
                 <ul className="divide-y">
                   {posts.map((post) => (
                     <li key={post.id} className="flex items-center justify-between gap-3 px-5 py-4">
                       <div className="min-w-0">
-                        <Link
-                          href={`/posts/${post.id}`}
-                          className="block truncate font-medium hover:text-brand-600"
-                        >
-                          {post.title}
-                        </Link>
+                        <div className="flex items-center gap-1.5">
+                          {post.is_pinned && (
+                            <Pin size={13} className="shrink-0 text-brand-500" />
+                          )}
+                          <Link
+                            href={`/posts/${post.id}`}
+                            className="block truncate font-medium hover:text-brand-600"
+                          >
+                            {post.title}
+                          </Link>
+                        </div>
                         <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-400">
                           <span className={post.is_free ? "text-green-600" : "text-brand-600"}>
-                            {post.is_free ? "Бесплатно" : "Платно"}
+                            {post.is_free ? t.post.free : t.post.paid}
                           </span>
                           <span>·</span>
                           <span>
                             {formatDistanceToNow(new Date(post.created_at), {
                               addSuffix: true,
-                              locale: ru,
+                              locale: dateLocale,
                             })}
                           </span>
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
+                        {post.is_published && (
+                          <button
+                            onClick={() => pinMutation.mutate({ id: post.id, pinned: !!post.is_pinned })}
+                            disabled={pinMutation.isPending}
+                            title={post.is_pinned ? t.dashboard.unpin : t.dashboard.pin}
+                            className={`btn-ghost p-2 ${post.is_pinned ? "text-brand-500" : "text-gray-400"}`}
+                          >
+                            {post.is_pinned ? <PinOff size={15} /> : <Pin size={15} />}
+                          </button>
+                        )}
                         {!post.is_published && (
                           <button
                             onClick={() => publishMutation.mutate(post.id)}
                             disabled={publishMutation.isPending}
-                            title="Опубликовать"
+                            title={t.dashboard.publish}
                             className="btn-ghost p-2 text-green-600"
                           >
                             <Send size={15} />
                           </button>
                         )}
-                        <span title={post.is_published ? "Опубликован" : "Черновик"}>
+                        <span title={post.is_published ? t.dashboard.published : t.post.draft}>
                           {post.is_published ? (
                             <Eye size={15} className="text-gray-400" />
                           ) : (
@@ -156,7 +185,7 @@ export default function DashboardPage() {
                         <Link
                           href={`/dashboard/posts/${post.id}`}
                           className="btn-ghost p-2 text-gray-500"
-                          title="Редактировать"
+                          title={t.dashboard.editProfile}
                         >
                           <Pencil size={15} />
                         </Link>
@@ -178,9 +207,9 @@ export default function DashboardPage() {
 
       {deleteTarget && (
         <ConfirmModal
-          title="Удалить пост?"
-          message="Это действие нельзя отменить. Пост будет удалён безвозвратно."
-          confirmLabel="Удалить"
+          title={t.dashboard.deleteTitle}
+          message={t.dashboard.deleteMessage}
+          confirmLabel={t.dashboard.deleteConfirm}
           danger
           onConfirm={() => deleteMutation.mutate(deleteTarget)}
           onClose={() => setDeleteTarget(null)}

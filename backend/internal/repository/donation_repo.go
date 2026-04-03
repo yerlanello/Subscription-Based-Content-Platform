@@ -35,6 +35,35 @@ func (r *DonationRepo) ExistsBySessionID(ctx context.Context, sessionID string) 
 	return exists, err
 }
 
+func (r *DonationRepo) GetByDonor(ctx context.Context, donorID uuid.UUID) ([]models.BillingDonation, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT d.id, d.amount_cents, d.message, d.created_at,
+		       u.username, cp.display_name, u.avatar_url
+		FROM donations d
+		JOIN users u ON u.id = d.creator_id
+		JOIN creator_profiles cp ON cp.user_id = d.creator_id
+		WHERE d.donor_id = $1
+		ORDER BY d.created_at DESC
+	`, donorID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []models.BillingDonation
+	for rows.Next() {
+		var b models.BillingDonation
+		if err := rows.Scan(
+			&b.ID, &b.AmountCents, &b.Message, &b.CreatedAt,
+			&b.CreatorUsername, &b.CreatorName, &b.CreatorAvatar,
+		); err != nil {
+			return nil, err
+		}
+		result = append(result, b)
+	}
+	return result, nil
+}
+
 func (r *DonationRepo) GetByCreator(ctx context.Context, creatorID uuid.UUID, limit, offset int) ([]models.Donation, error) {
 	rows, err := r.db.Query(ctx, `
 		SELECT d.id, d.donor_id, d.creator_id, d.amount_cents, d.message, d.stripe_session_id, d.created_at,

@@ -62,6 +62,11 @@ func (h *StripeHandler) CreateCheckout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// KZT — не zero-decimal валюта, передаём в тиынах (x100)
+	// Stripe max for KZT: 9_999_999 tenge
+	if profile.SubscriptionPriceCents > 9_999_999 {
+		response.Error(w, http.StatusBadRequest, "subscription price exceeds maximum allowed (9 999 999 ₸)")
+		return
+	}
 	amountTiyn := int64(profile.SubscriptionPriceCents) * 100
 
 	params := &stripe.CheckoutSessionParams{
@@ -189,6 +194,10 @@ func (h *StripeHandler) CreateDonationCheckout(w http.ResponseWriter, r *http.Re
 		frontendURL = "http://localhost:3000"
 	}
 
+	if body.AmountCents > 9_999_999 {
+		response.Error(w, http.StatusBadRequest, "donation amount exceeds maximum allowed (9 999 999 ₸)")
+		return
+	}
 	amountTiyn := int64(body.AmountCents) * 100
 
 	params := &stripe.CheckoutSessionParams{

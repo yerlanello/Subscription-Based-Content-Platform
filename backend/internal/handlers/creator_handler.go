@@ -3,13 +3,19 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"path/filepath"
 	"strconv"
+	"strings"
 
 	"diploma/backend/internal/middleware"
 	"diploma/backend/internal/models"
 	"diploma/backend/internal/repository"
 	"diploma/backend/internal/response"
+	"diploma/backend/internal/storage"
+
+	"github.com/google/uuid"
 )
 
 type CreatorHandler struct {
@@ -17,6 +23,7 @@ type CreatorHandler struct {
 	userRepo    *repository.UserRepo
 	subRepo     *repository.SubscriptionRepo
 	followRepo  *repository.FollowRepo
+	storage     *storage.MinioStorage
 }
 
 func NewCreatorHandler(
@@ -24,8 +31,9 @@ func NewCreatorHandler(
 	userRepo *repository.UserRepo,
 	subRepo *repository.SubscriptionRepo,
 	followRepo *repository.FollowRepo,
+	stor *storage.MinioStorage,
 ) *CreatorHandler {
-	return &CreatorHandler{creatorRepo: creatorRepo, userRepo: userRepo, subRepo: subRepo, followRepo: followRepo}
+	return &CreatorHandler{creatorRepo: creatorRepo, userRepo: userRepo, subRepo: subRepo, followRepo: followRepo, storage: stor}
 }
 
 // BecomeCreator — создать профиль автора
@@ -79,12 +87,17 @@ func (h *CreatorHandler) GetCreatorByUsername(w http.ResponseWriter, r *http.Req
 		isFollowing, _ = h.followRepo.IsFollowing(r.Context(), claims.UserID, user.ID)
 	}
 
+	subscriberCount, _ := h.subRepo.CountByCreator(r.Context(), user.ID)
+	followerCount, _ := h.followRepo.CountByCreator(r.Context(), user.ID)
+
 	user.Email = ""
 	response.OK(w, map[string]any{
-		"user":          user,
-		"profile":       profile,
-		"is_subscribed": isSubscribed,
-		"is_following":  isFollowing,
+		"user":             user,
+		"profile":          profile,
+		"is_subscribed":    isSubscribed,
+		"is_following":     isFollowing,
+		"subscriber_count": subscriberCount,
+		"follower_count":   followerCount,
 	})
 }
 
@@ -235,4 +248,59 @@ func (h *CreatorHandler) MyFollowing(w http.ResponseWriter, r *http.Request) {
 		creators = []models.CreatorWithProfile{}
 	}
 	response.OK(w, creators)
+}
+
+// UploadCover — POST /api/creators/{username}/cover
+func (h *CreatorHandler) UploadCover(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r)
+	username := r.PathValue("username")
+
+	user, err := h.userRepo.GetByUsername(r.Context(), username)
+	if err != nil {
+		response.Error(w, http.StatusNotFound, "creator not found")
+		return
+	}
+	if user.ID != claims.UserID {
+		response.Error(w, http.StatusForbidden, "forbidden")
+		return
+	}
+	if h.storage == nil {
+		response.Error(w, http.StatusServiceUnavailable, "storage not configured")
+		return
+	}
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		response.Error(w, http.StatusBadRequest, "file too large (max 10MB)")
+		return
+	}
+	file, header, err := r.FormFile("cover")
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "cover file is required")
+		return
+	}
+	defer file.Close()
+
+	ext := strings.ToLower(filepath.Ext(header.Filename))
+	allowedExts := map[string]string{
+		".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+		".png": "image/png", ".webp": "image/webp",
+	}
+	mimeType, ok := allowedExts[ext]
+	if !ok {
+		response.Error(w, http.StatusBadRequest, "only jpg, png, webp images are allowed")
+		return
+	}
+
+	objectName := fmt.Sprintf("covers/%s/%s%s", username, uuid.New().String(), ext)
+	url, err := h.storage.UploadFile(r.Context(), file, objectName, mimeType, header.Size)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "upload failed")
+		return
+	}
+
+	profile, err := h.creatorRepo.Update(r.Context(), claims.UserID, nil, nil, &url, nil, nil, nil)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	response.OK(w, profile)
 }

@@ -3,15 +3,22 @@
 import Link from "next/link";
 import { Post } from "@/lib/types";
 import { formatDistanceToNow } from "date-fns";
-import { ru } from "date-fns/locale";
+import { ru as ruLocale, enUS, kk as kkLocale } from "date-fns/locale";
 import { Heart, Lock, MessageCircle } from "lucide-react";
 import { RenderContent } from "./RenderContent";
+import { useT } from "@/hooks/useT";
+import { useLocaleStore } from "@/store/localeStore";
+
+const dateFnsLocales = { ru: ruLocale, en: enUS, kk: kkLocale };
 
 interface Props {
   post: Post;
 }
 
 export function PostCard({ post }: Props) {
+  const t = useT();
+  const locale = useLocaleStore((s) => s.locale);
+  const dateLocale = dateFnsLocales[locale];
   const isLocked = !post.is_free && post.content === null;
 
   return (
@@ -34,16 +41,16 @@ export function PostCard({ post }: Props) {
         <div className="flex items-center gap-2">
           {!post.is_free && (
             <span className="flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-xs text-brand-600">
-              <Lock size={10} /> Платно
+              <Lock size={10} /> {t.post.paid}
             </span>
           )}
           <span className="text-xs text-gray-400">
             {post.published_at
               ? formatDistanceToNow(new Date(post.published_at), {
                   addSuffix: true,
-                  locale: ru,
+                  locale: dateLocale,
                 })
-              : "Черновик"}
+              : t.post.draft}
           </span>
         </div>
       </div>
@@ -57,7 +64,7 @@ export function PostCard({ post }: Props) {
       {isLocked ? (
         <div className="flex items-center gap-2 rounded-lg bg-gray-50 dark:bg-gray-800 px-4 py-3 text-sm text-gray-400">
           <Lock size={14} />
-          Подпишитесь чтобы читать этот пост
+          {t.post.subscribeToRead}
         </div>
       ) : (
         post.content && (
@@ -99,7 +106,7 @@ export function PostCard({ post }: Props) {
           {post.comments_count ?? 0}
         </span>
         <Link href={`/posts/${post.id}${!post.is_free ? "?locked=1" : ""}`} className="ml-auto text-brand-600 hover:underline">
-          Читать →
+          {t.post.read}
         </Link>
       </div>
     </article>
