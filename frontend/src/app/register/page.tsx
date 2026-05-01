@@ -35,7 +35,7 @@ export default function RegisterPage() {
       const res = await authApi.register(values);
       const { user, access_token, refresh_token } = res.data.data;
       login(user, access_token, refresh_token);
-      router.push("/");
+      router.push("/check-email");
     } catch (err: unknown) {
       const e = err as { response?: { data?: { error?: string } } };
       setServerError(e.response?.data?.error ?? t.auth.registerError);

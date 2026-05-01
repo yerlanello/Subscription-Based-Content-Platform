@@ -151,4 +151,24 @@
   .animate-fade-in {
     animation: fadeIn 0.2s ease-out forwards;
   }
+
+  @keyframes like-particle {
+    0%   { transform: translate(0, 0) scale(1); opacity: 1; }
+    100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
+  }
+  .like-particle {
+    position: absolute;
+    pointer-events: none;
+    animation: like-particle 0.6s ease-out forwards;
+  }
+
+  @keyframes like-pop {
+    0%   { transform: scale(1); }
+    40%  { transform: scale(1.4); }
+    70%  { transform: scale(0.9); }
+    100% { transform: scale(1); }
+  }
+  .like-pop {
+    animation: like-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  }
 }

@@ -26,15 +26,16 @@ const (
 )
 
 type User struct {
-	ID           uuid.UUID `json:"id"`
-	Username     string    `json:"username"`
-	Email        string    `json:"email,omitempty"`
-	PasswordHash string    `json:"-"`
-	Role         UserRole  `json:"role"`
-	AvatarURL    *string   `json:"avatar_url"`
-	Bio          *string   `json:"bio"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID            uuid.UUID `json:"id"`
+	Username      string    `json:"username"`
+	Email         string    `json:"email,omitempty"`
+	PasswordHash  string    `json:"-"`
+	Role          UserRole  `json:"role"`
+	EmailVerified bool      `json:"email_verified"`
+	AvatarURL     *string   `json:"avatar_url"`
+	Bio           *string   `json:"bio"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 type CreatorProfile struct {
@@ -100,6 +101,33 @@ type PostAttachment struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type Stream struct {
+	ID          uuid.UUID  `json:"id"`
+	CreatorID   uuid.UUID  `json:"creator_id"`
+	Title       string     `json:"title"`
+	Status      string     `json:"status"`
+	Latitude    *float64   `json:"latitude"`
+	Longitude   *float64   `json:"longitude"`
+	LivekitRoom string     `json:"livekit_room"`
+	ViewerCount int        `json:"viewer_count"`
+	StartedAt   time.Time  `json:"started_at"`
+	EndedAt     *time.Time `json:"ended_at"`
+	// Joined fields
+	Username    string  `json:"username"`
+	DisplayName string  `json:"display_name"`
+	AvatarURL   *string `json:"avatar_url"`
+}
+
+type StreamMessage struct {
+	ID          uuid.UUID `json:"id"`
+	StreamID    uuid.UUID `json:"stream_id"`
+	UserID      uuid.UUID `json:"user_id"`
+	Username    string    `json:"username"`
+	DisplayName string    `json:"display_name"`
+	Message     string    `json:"message"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
 type Comment struct {
 	ID        uuid.UUID  `json:"id"`
 	PostID    uuid.UUID  `json:"post_id"`
@@ -110,8 +138,10 @@ type Comment struct {
 	UpdatedAt time.Time  `json:"updated_at"`
 
 	// Joined
-	Author  *PublicUser `json:"author,omitempty"`
-	Replies []Comment   `json:"replies,omitempty"`
+	Author     *PublicUser `json:"author,omitempty"`
+	Replies    []Comment   `json:"replies,omitempty"`
+	LikesCount int         `json:"likes_count"`
+	IsLiked    bool        `json:"is_liked"`
 }
 
 type RefreshToken struct {

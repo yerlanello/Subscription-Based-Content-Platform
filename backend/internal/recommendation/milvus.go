@@ -19,8 +19,12 @@ type MilvusClient struct {
 	c client.Client
 }
 
-func NewMilvusClient(ctx context.Context, addr string) (*MilvusClient, error) {
-	c, err := client.NewClient(ctx, client.Config{Address: addr})
+func NewMilvusClient(ctx context.Context, addr string, apiKey ...string) (*MilvusClient, error) {
+	cfg := client.Config{Address: addr}
+	if len(apiKey) > 0 && apiKey[0] != "" {
+		cfg.APIKey = apiKey[0]
+	}
+	c, err := client.NewClient(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("milvus connect: %w", err)
 	}

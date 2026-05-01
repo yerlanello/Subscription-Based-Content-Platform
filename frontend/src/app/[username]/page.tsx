@@ -6,7 +6,10 @@ import { CreatorPage, Post } from "@/lib/types";
 import { useAuth } from "@/hooks/useAuth";
 import { PostCard } from "@/components/post/PostCard";
 import { formatPrice } from "@/lib/auth";
-import { UserCheck, Heart, CreditCard, AlertTriangle, Gift, Users, BookOpen, Calendar, Pin } from "lucide-react";
+import { UserCheck, Heart, CreditCard, AlertTriangle, Gift, Users, BookOpen, Calendar, Pin, Radio } from "lucide-react";
+import Link from "next/link";
+import { streamsApi } from "@/lib/api";
+import type { StreamInfo } from "@/components/StreamMap";
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
@@ -44,6 +47,14 @@ export default function CreatorProfilePage({
     queryKey: ["creator", username],
     queryFn: () =>
       creatorsApi.getByUsername(username).then((r) => r.data.data as CreatorPage),
+  });
+
+  const { data: liveStream } = useQuery({
+    queryKey: ["creator-stream", username],
+    queryFn: () =>
+      streamsApi.getByCreator(username).then((r) => r.data.data as StreamInfo | null),
+    refetchInterval: 15000,
+    enabled: !!creator,
   });
 
   const { data: posts } = useQuery({
@@ -154,6 +165,24 @@ export default function CreatorProfilePage({
       </div>
 
       {/* Info */}
+      {/* Live stream banner */}
+      {liveStream && (
+        <Link
+          href={`/streams/${liveStream.id}`}
+          className="mb-4 flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 hover:bg-red-100 transition-colors dark:border-red-800 dark:bg-red-900/20 dark:hover:bg-red-900/30"
+        >
+          <span className="flex items-center gap-1.5 rounded-full bg-red-500 px-2.5 py-1 text-xs font-bold text-white flex-shrink-0">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
+            LIVE
+          </span>
+          <Radio size={16} className="text-red-500 flex-shrink-0" />
+          <span className="font-medium text-red-700 dark:text-red-300 truncate">
+            {liveStream.title}
+          </span>
+          <span className="ml-auto text-sm text-red-500 flex-shrink-0">Смотреть →</span>
+        </Link>
+      )}
+
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">{creator.profile.display_name}</h1>

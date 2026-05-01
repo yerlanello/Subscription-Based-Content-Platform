@@ -13,6 +13,19 @@ function isHTML(str: string) {
   return /^\s*</.test(str);
 }
 
+// Replace standalone YouTube URL paragraphs (plain or wrapped in <a>) with embedded iframes
+function injectYouTube(html: string): string {
+  return html.replace(
+    /<p>(?:<a[^>]*>)?https?:\/\/(?:www\.youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})[^<]*(?:<\/a>)?<\/p>/g,
+    (_match, videoId) =>
+      `<div style="position:relative;padding-bottom:56.25%;overflow:hidden;border-radius:8px;margin:1rem 0">` +
+      `<iframe src="https://www.youtube.com/embed/${videoId}" ` +
+      `style="position:absolute;inset:0;width:100%;height:100%;border:0" ` +
+      `allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" ` +
+      `allowfullscreen></iframe></div>`
+  );
+}
+
 export function RenderContent({ content, className, preview = false }: Props) {
   if (isHTML(content)) {
     if (preview) {
@@ -25,7 +38,7 @@ export function RenderContent({ content, className, preview = false }: Props) {
         className={`prose prose-sm dark:prose-invert max-w-none break-words ${className ?? ""}`}
         // TipTap produces safe HTML (no user-controlled script injection path)
         // eslint-disable-next-line react/no-danger
-        dangerouslySetInnerHTML={{ __html: content }}
+        dangerouslySetInnerHTML={{ __html: injectYouTube(content) }}
       />
     );
   }

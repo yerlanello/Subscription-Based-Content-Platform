@@ -19,14 +19,16 @@ var (
 )
 
 type PostService struct {
-	postRepo   *repository.PostRepo
-	subRepo    *repository.SubscriptionRepo
-	notifRepo  *repository.NotificationRepo
-	hub        *hub.Hub
+	postRepo    *repository.PostRepo
+	subRepo     *repository.SubscriptionRepo
+	notifRepo   *repository.NotificationRepo
+	userRepo    *repository.UserRepo
+	commentRepo *repository.CommentRepo
+	hub         *hub.Hub
 }
 
-func NewPostService(postRepo *repository.PostRepo, subRepo *repository.SubscriptionRepo, notifRepo *repository.NotificationRepo, h *hub.Hub) *PostService {
-	return &PostService{postRepo: postRepo, subRepo: subRepo, notifRepo: notifRepo, hub: h}
+func NewPostService(postRepo *repository.PostRepo, subRepo *repository.SubscriptionRepo, notifRepo *repository.NotificationRepo, userRepo *repository.UserRepo, commentRepo *repository.CommentRepo, h *hub.Hub) *PostService {
+	return &PostService{postRepo: postRepo, subRepo: subRepo, notifRepo: notifRepo, userRepo: userRepo, commentRepo: commentRepo, hub: h}
 }
 
 type CreatePostInput struct {
@@ -199,11 +201,69 @@ func (s *PostService) Feed(ctx context.Context, userID uuid.UUID, limit, offset 
 }
 
 func (s *PostService) Like(ctx context.Context, postID, userID uuid.UUID) error {
-	return s.postRepo.Like(ctx, postID, userID)
+	if err := s.postRepo.Like(ctx, postID, userID); err != nil {
+		return err
+	}
+	go s.notifyPostLike(postID, userID)
+	return nil
+}
+
+func (s *PostService) notifyPostLike(postID, likerID uuid.UUID) {
+	ctx := context.Background()
+	post, err := s.postRepo.GetByID(ctx, postID)
+	if err != nil || post.CreatorID == likerID {
+		return // don't notify if liking own post
+	}
+	liker, err := s.userRepo.GetByID(ctx, likerID)
+	if err != nil {
+		return
+	}
+	title := fmt.Sprintf("%s лайкнул ваш пост", liker.Username)
+	link := fmt.Sprintf("/posts/%s", postID)
+	body := post.Title
+	event := hub.Event{Type: "post_liked", Title: title, Body: body, Link: link}
+	s.hub.Send(post.CreatorID, event)
+	n, err := s.notifRepo.Create(ctx, post.CreatorID, "post_liked", title, &body, &link)
+	if err == nil {
+		event.ID = n.ID.String()
+	}
 }
 
 func (s *PostService) Unlike(ctx context.Context, postID, userID uuid.UUID) error {
 	return s.postRepo.Unlike(ctx, postID, userID)
+}
+
+func (s *PostService) LikeComment(ctx context.Context, commentID, userID uuid.UUID) error {
+	if err := s.commentRepo.LikeComment(ctx, commentID, userID); err != nil {
+		return err
+	}
+	go s.notifyCommentLike(commentID, userID)
+	return nil
+}
+
+func (s *PostService) UnlikeComment(ctx context.Context, commentID, userID uuid.UUID) error {
+	return s.commentRepo.UnlikeComment(ctx, commentID, userID)
+}
+
+func (s *PostService) notifyCommentLike(commentID, likerID uuid.UUID) {
+	ctx := context.Background()
+	comment, err := s.commentRepo.GetByID(ctx, commentID)
+	if err != nil || comment.UserID == likerID {
+		return // don't notify if liking own comment
+	}
+	liker, err := s.userRepo.GetByID(ctx, likerID)
+	if err != nil {
+		return
+	}
+	title := fmt.Sprintf("%s лайкнул ваш комментарий", liker.Username)
+	link := fmt.Sprintf("/posts/%s", comment.PostID)
+	body := comment.Content
+	event := hub.Event{Type: "comment_liked", Title: title, Body: body, Link: link}
+	s.hub.Send(comment.UserID, event)
+	n, err := s.notifRepo.Create(ctx, comment.UserID, "comment_liked", title, &body, &link)
+	if err == nil {
+		event.ID = n.ID.String()
+	}
 }
 
 // GetOwn — получить пост только если requester — автор

@@ -6,8 +6,9 @@ import { Post, Comment } from "@/lib/types";
 import { useAuth } from "@/hooks/useAuth";
 import { formatDistanceToNow } from "date-fns";
 import { ru as ruLocale, enUS, kk as kkLocale } from "date-fns/locale";
-import { Heart, Lock, MessageCircle, Trash2, ChevronDown, ChevronUp, CornerDownRight, Languages } from "lucide-react";
+import { Lock, MessageCircle, Trash2, ChevronDown, ChevronUp, CornerDownRight, Languages } from "lucide-react";
 import { RenderContent } from "@/components/post/RenderContent";
+import { LikeButton } from "@/components/post/LikeButton";
 import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -38,17 +39,21 @@ function Avatar({ url, username, size = 8 }: { url: string | null | undefined; u
 
 function CommentRow({
   comment,
+  postId,
   user,
   dateLocale,
   onReply,
   onDelete,
+  onLikeToggle,
   t,
 }: {
   comment: Comment;
+  postId: string;
   user: User | null;
   dateLocale: Locale;
   onReply: () => void;
   onDelete: () => void;
+  onLikeToggle: () => void;
   t: Translations;
 }) {
   return (
@@ -71,6 +76,14 @@ function CommentRow({
               <CornerDownRight size={12} />
               {t.post.reply}
             </button>
+          )}
+          {user && (
+            <LikeButton
+              liked={!!comment.is_liked}
+              count={comment.likes_count ?? 0}
+              onClick={onLikeToggle}
+              size="sm"
+            />
           )}
           {user?.id === comment.user_id && (
             <button onClick={onDelete} className="text-gray-300 hover:text-red-400 transition-colors">
@@ -164,6 +177,12 @@ export default function PostPage({ params }: { params: { id: string } }) {
 
   const deleteCommentMutation = useMutation({
     mutationFn: (commentId: string) => postsApi.deleteComment(id, commentId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["comments", id] }),
+  });
+
+  const likeCommentMutation = useMutation({
+    mutationFn: ({ commentId, liked }: { commentId: string; liked: boolean }) =>
+      liked ? postsApi.unlikeComment(id, commentId) : postsApi.likeComment(id, commentId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["comments", id] }),
   });
 
@@ -353,15 +372,12 @@ export default function PostPage({ params }: { params: { id: string } }) {
 
         <div className="mt-6 flex items-center gap-4 border-t dark:border-gray-700 pt-4">
           {user && (
-            <button
+            <LikeButton
+              liked={!!post.is_liked}
+              count={post.likes_count ?? 0}
               onClick={() => likeMutation.mutate()}
-              className={`flex items-center gap-2 text-sm transition-colors ${
-                post.is_liked ? "text-red-500" : "text-gray-500 hover:text-red-500"
-              }`}
-            >
-              <Heart size={18} className={post.is_liked ? "fill-red-500" : ""} />
-              {post.likes_count ?? 0}
-            </button>
+              disabled={likeMutation.isPending}
+            />
           )}
           <span className="flex items-center gap-2 text-sm text-gray-500">
             <MessageCircle size={18} />
@@ -405,10 +421,12 @@ export default function PostPage({ params }: { params: { id: string } }) {
                   {/* Root comment */}
                   <CommentRow
                     comment={c}
+                    postId={id}
                     user={user}
                     dateLocale={dateLocale}
                     onReply={() => startReply(c.id, c.author?.username ?? "")}
                     onDelete={() => deleteCommentMutation.mutate(c.id)}
+                    onLikeToggle={() => likeCommentMutation.mutate({ commentId: c.id, liked: !!c.is_liked })}
                     t={t}
                   />
 
@@ -435,10 +453,12 @@ export default function PostPage({ params }: { params: { id: string } }) {
                             <CommentRow
                               key={reply.id}
                               comment={reply}
+                              postId={id}
                               user={user}
                               dateLocale={dateLocale}
                               onReply={() => startReply(c.id, reply.author?.username ?? "", `@${reply.author?.username} `)}
                               onDelete={() => deleteCommentMutation.mutate(reply.id)}
+                              onLikeToggle={() => likeCommentMutation.mutate({ commentId: reply.id, liked: !!reply.is_liked })}
                               t={t}
                             />
                           ))}

@@ -64,6 +64,13 @@ services:
       - "8001:8001"
     restart: unless-stopped
 
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # Web UI (http://localhost:8025)
+
 volumes:
   pgdata:
   miniodata:

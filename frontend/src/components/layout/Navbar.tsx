@@ -5,7 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { authApi } from "@/lib/api";
 import { getTokens } from "@/lib/auth";
 import { useRouter, usePathname } from "next/navigation";
-import { User, LayoutDashboard, LogOut, Rss, Home, Moon, Sun, Heart, Globe, CreditCard } from "lucide-react";
+import { User, LayoutDashboard, LogOut, Rss, Home, Moon, Sun, Heart, Globe, CreditCard, Radio } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { NotificationBell } from "./NotificationBell";
 import { NotificationToasts } from "./NotificationToasts";
@@ -83,9 +83,35 @@ export function Navbar() {
     router.push("/");
   };
 
+  const [resendingSent, setResendingSent] = useState(false);
+
+  const handleResendVerification = async () => {
+    try {
+      await authApi.resendVerification();
+      setResendingSent(true);
+    } catch {
+      // silently ignore
+    }
+  };
+
   return (
     <>
     <NotificationToasts toasts={toasts} onDismiss={dismissToast} />
+    {user && !user.email_verified && (
+      <div className="bg-yellow-50 dark:bg-yellow-900/30 border-b border-yellow-200 dark:border-yellow-700 px-4 py-2 text-center text-sm text-yellow-800 dark:text-yellow-200 flex flex-wrap items-center justify-center gap-2">
+        <span>Подтвердите email — мы отправили письмо на <strong>{user.email}</strong></span>
+        {resendingSent ? (
+          <span className="text-yellow-600 dark:text-yellow-400 font-medium">Письмо отправлено!</span>
+        ) : (
+          <button
+            onClick={handleResendVerification}
+            className="underline font-medium hover:text-yellow-900 dark:hover:text-yellow-100 transition-colors"
+          >
+            Отправить повторно
+          </button>
+        )}
+      </div>
+    )}
     <nav className="sticky top-0 z-50 border-b border-gray-200 dark:border-gray-800 bg-white/90 dark:bg-gray-950/90 backdrop-blur-md">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
         <Link href="/" className="text-xl font-bold text-brand-600 transition-opacity hover:opacity-80">
@@ -106,6 +132,10 @@ export function Navbar() {
               <Link href="/following" className="btn-ghost hidden sm:flex">
                 <Heart size={16} />
                 {t.nav.subscriptions}
+              </Link>
+              <Link href="/streams" className="btn-ghost hidden sm:flex">
+                <Radio size={16} />
+                Эфиры
               </Link>
               {(user.role === "creator" || user.role === "both") && (
                 <Link href="/dashboard" className="btn-ghost hidden sm:flex">

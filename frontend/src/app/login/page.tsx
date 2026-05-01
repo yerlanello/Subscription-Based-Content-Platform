@@ -34,7 +34,11 @@ export default function LoginPage() {
       const res = await authApi.login(values);
       const { user, access_token, refresh_token } = res.data.data;
       login(user, access_token, refresh_token);
-      router.push("/feed");
+      if (!user.email_verified) {
+        router.push("/check-email");
+      } else {
+        router.push("/feed");
+      }
     } catch (err: unknown) {
       const e = err as { response?: { data?: { error?: string } } };
       setServerError(e.response?.data?.error ?? t.auth.loginError);
@@ -54,7 +58,12 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium">{t.auth.password}</label>
+            <div className="mb-1 flex items-center justify-between">
+              <label className="text-sm font-medium">{t.auth.password}</label>
+              <Link href="/forgot-password" className="text-xs text-brand-600 hover:underline">
+                Забыли пароль?
+              </Link>
+            </div>
             <input className="input" type="password" placeholder="••••••••" {...register("password")} />
             {errors.password && <p className="mt-1 text-xs text-red-500">{errors.password.message}</p>}
           </div>

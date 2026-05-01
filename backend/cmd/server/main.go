@@ -6,7 +6,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
+	"diploma/backend/internal/email"
 	"diploma/backend/internal/handlers"
 	"diploma/backend/internal/hub"
 	"diploma/backend/internal/middleware"
@@ -44,6 +46,11 @@ func main() {
 	}
 	defer pool.Close()
 
+	// Run migrations
+	if err := repository.RunMigrations(ctx, pool); err != nil {
+		log.Fatalf("migrations: %v", err)
+	}
+
 	// Storage (MinIO)
 	minioEndpoint := os.Getenv("MINIO_ENDPOINT")
 	minioAccess := os.Getenv("MINIO_ACCESS_KEY")
@@ -71,13 +78,21 @@ func main() {
 	followRepo := repository.NewFollowRepo(pool)
 	notifRepo := repository.NewNotificationRepo(pool)
 	donationRepo := repository.NewDonationRepo(pool)
+	tokenRepo := repository.NewTokenRepo(pool)
 
 	// Hub
 	notifHub := hub.New()
 
+	// Email service
+	emailSvc := email.NewService(
+		os.Getenv("SMTP_HOST"), os.Getenv("SMTP_PORT"),
+		os.Getenv("SMTP_USER"), os.Getenv("SMTP_PASS"),
+		os.Getenv("SMTP_FROM"), os.Getenv("APP_URL"),
+	)
+
 	// Services
-	authSvc := service.NewAuthService(userRepo, jwtSecret)
-	postSvc := service.NewPostService(postRepo, subRepo, notifRepo, notifHub)
+	authSvc := service.NewAuthService(userRepo, jwtSecret, emailSvc, tokenRepo)
+	postSvc := service.NewPostService(postRepo, subRepo, notifRepo, userRepo, commentRepo, notifHub)
 
 	// Recommendation system (optional — degrades gracefully if unavailable)
 	var recSvc *recommendation.Service
@@ -89,7 +104,7 @@ func main() {
 	if embeddingURL == "" {
 		embeddingURL = "http://localhost:8001"
 	}
-	milvusClient, err := recommendation.NewMilvusClient(ctx, milvusAddr)
+	milvusClient, err := recommendation.NewMilvusClient(ctx, milvusAddr, os.Getenv("MILVUS_API_KEY"))
 	if err != nil {
 		log.Printf("warn: milvus unavailable, recommendations disabled: %v", err)
 	} else {
@@ -107,14 +122,20 @@ func main() {
 	notifH := handlers.NewNotificationHandler(notifRepo, notifHub)
 	stripeH := handlers.NewStripeHandler(subRepo, creatorRepo, userRepo, donationRepo)
 	billingH := handlers.NewBillingHandler(subRepo, donationRepo)
+	sRepo := repository.NewStreamRepo(pool)
+	streamH := handlers.NewStreamHandler(sRepo, notifRepo, notifHub)
 
 	// Router
 	r := chi.NewRouter()
 	r.Use(chimiddleware.Logger)
 	r.Use(chimiddleware.Recoverer)
 	r.Use(chimiddleware.RequestID)
+	allowedOrigins := []string{"http://localhost:3000", "http://localhost:3001"}
+	if frontendURL := os.Getenv("FRONTEND_URL"); frontendURL != "" {
+		allowedOrigins = append(allowedOrigins, frontendURL)
+	}
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:3000", "http://localhost:3001"},
+		AllowedOrigins:   allowedOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Authorization", "Content-Type"},
 		AllowCredentials: true,
@@ -131,6 +152,10 @@ func main() {
 			r.Post("/refresh", authH.Refresh)
 			r.With(authMiddleware).Delete("/logout", authH.Logout)
 			r.With(authMiddleware).Delete("/logout-all", authH.LogoutAll)
+			r.Post("/verify-email", authH.VerifyEmail)
+			r.With(authMiddleware).Post("/resend-verification", authH.ResendVerification)
+			r.Post("/forgot-password", authH.ForgotPassword)
+			r.Post("/reset-password", authH.ResetPassword)
 		})
 
 		// Users
@@ -194,12 +219,37 @@ func main() {
 			r.With(optionalAuth).Get("/{id}/comments", postH.GetComments)
 			r.With(authMiddleware).Post("/{id}/comments", postH.CreateComment)
 			r.With(authMiddleware).Delete("/{id}/comments/{commentId}", postH.DeleteComment)
+			r.With(authMiddleware).Post("/{id}/comments/{commentId}/like", postH.LikeComment)
+			r.With(authMiddleware).Delete("/{id}/comments/{commentId}/like", postH.UnlikeComment)
 			r.With(authMiddleware).Post("/{id}/attachments", postH.UploadAttachment)
 			r.With(authMiddleware).Delete("/{id}/attachments/{attachmentId}", postH.DeleteAttachment)
 			r.With(authMiddleware).Post("/{id}/pin", postH.PinPost)
 			r.With(authMiddleware).Delete("/{id}/pin", postH.UnpinPost)
 		})
+
+		// Streams
+		r.Route("/streams", func(r chi.Router) {
+			r.Get("/", streamH.List)
+			r.With(authMiddleware).Get("/my", streamH.GetMine)
+			r.With(authMiddleware).Post("/start", streamH.Start)
+			r.Get("/by-creator/{username}", streamH.GetByCreator)
+			r.Get("/{id}", streamH.Get)
+			r.Get("/{id}/messages", streamH.GetMessages)
+			r.With(authMiddleware).Post("/{id}/end", streamH.End)
+			r.With(authMiddleware).Post("/{id}/join", streamH.Join)
+			r.With(authMiddleware).Patch("/{id}/location", streamH.UpdateLocation)
+			r.With(authMiddleware).Post("/{id}/messages", streamH.SendMessage)
+		})
 	})
+
+	// Clean up stale streams on startup, then every 10 minutes
+	sRepo.EndStale(ctx)
+	go func() {
+		for {
+			time.Sleep(10 * time.Minute)
+			sRepo.EndStale(context.Background())
+		}
+	}()
 
 	log.Printf("server starting on :%s", port)
 	if err := http.ListenAndServe(fmt.Sprintf(":%s", port), r); err != nil {

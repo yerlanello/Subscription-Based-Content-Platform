@@ -7,6 +7,7 @@ export interface User {
   username: string;
   email?: string;
   role: UserRole;
+  email_verified?: boolean;
   avatar_url: string | null;
   bio: string | null;
   created_at: string;
@@ -84,6 +85,8 @@ export interface Comment {
   updated_at: string;
   author?: PublicUser;
   replies?: Comment[];
+  likes_count?: number;
+  is_liked?: boolean;
 }
 
 export interface Subscription {

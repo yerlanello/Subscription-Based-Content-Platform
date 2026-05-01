@@ -318,8 +318,9 @@ func (h *PostHandler) GetComments(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusBadRequest, "invalid post id")
 		return
 	}
-
-	comments, err := h.commentRepo.GetByPost(r.Context(), postID)
+	// userID may be uuid.Nil for anonymous — that's fine, is_liked will be false
+	claims := middleware.GetClaims(r)
+	comments, err := h.commentRepo.GetByPost(r.Context(), postID, claims.UserID)
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, "internal error")
 		return
@@ -365,6 +366,34 @@ func (h *PostHandler) DeleteComment(w http.ResponseWriter, r *http.Request) {
 			response.Error(w, http.StatusNotFound, "comment not found")
 			return
 		}
+		response.Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	response.NoContent(w)
+}
+
+func (h *PostHandler) LikeComment(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r)
+	commentID, err := uuid.Parse(r.PathValue("commentId"))
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid comment id")
+		return
+	}
+	if err := h.postSvc.LikeComment(r.Context(), commentID, claims.UserID); err != nil {
+		response.Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	response.NoContent(w)
+}
+
+func (h *PostHandler) UnlikeComment(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r)
+	commentID, err := uuid.Parse(r.PathValue("commentId"))
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid comment id")
+		return
+	}
+	if err := h.postSvc.UnlikeComment(r.Context(), commentID, claims.UserID); err != nil {
 		response.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}

@@ -126,3 +126,76 @@ func (h *AuthHandler) LogoutAll(w http.ResponseWriter, r *http.Request) {
 	h.authSvc.LogoutAll(r.Context(), claims.UserID)
 	response.NoContent(w)
 }
+
+func (h *AuthHandler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil || input.Token == "" {
+		response.Error(w, http.StatusBadRequest, "token is required")
+		return
+	}
+
+	if err := h.authSvc.VerifyEmail(r.Context(), input.Token); err != nil {
+		if errors.Is(err, service.ErrTokenInvalid) {
+			response.Error(w, http.StatusBadRequest, "invalid or expired token")
+			return
+		}
+		response.Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	response.OK(w, map[string]string{"message": "email verified"})
+}
+
+func (h *AuthHandler) ResendVerification(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r)
+	if err := h.authSvc.SendVerificationEmail(r.Context(), claims.UserID); err != nil {
+		response.Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	response.OK(w, map[string]string{"message": "verification email sent"})
+}
+
+func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Email string `json:"email"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	// Always return 200 to not leak whether email exists
+	h.authSvc.ForgotPassword(r.Context(), input.Email)
+	response.OK(w, map[string]string{"message": "if the email is registered, instructions have been sent"})
+}
+
+func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Token    string `json:"token"`
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if input.Token == "" || input.Password == "" {
+		response.Error(w, http.StatusBadRequest, "token and password are required")
+		return
+	}
+	if len(input.Password) < 8 {
+		response.Error(w, http.StatusBadRequest, "password must be at least 8 characters")
+		return
+	}
+
+	if err := h.authSvc.ResetPassword(r.Context(), input.Token, input.Password); err != nil {
+		if errors.Is(err, service.ErrTokenInvalid) {
+			response.Error(w, http.StatusBadRequest, "invalid or expired token")
+			return
+		}
+		response.Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	response.OK(w, map[string]string{"message": "password updated"})
+}

@@ -28,10 +28,10 @@ func (r *UserRepo) Create(ctx context.Context, username, email, passwordHash str
 	err := r.db.QueryRow(ctx, `
 		INSERT INTO users (username, email, password_hash)
 		VALUES ($1, $2, $3)
-		RETURNING id, username, email, password_hash, role, avatar_url, bio, created_at, updated_at
+		RETURNING id, username, email, password_hash, role, email_verified, avatar_url, bio, created_at, updated_at
 	`, username, email, passwordHash).Scan(
 		&user.ID, &user.Username, &user.Email, &user.PasswordHash,
-		&user.Role, &user.AvatarURL, &user.Bio, &user.CreatedAt, &user.UpdatedAt,
+		&user.Role, &user.EmailVerified, &user.AvatarURL, &user.Bio, &user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -45,11 +45,11 @@ func (r *UserRepo) Create(ctx context.Context, username, email, passwordHash str
 func (r *UserRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.User, error) {
 	user := &models.User{}
 	err := r.db.QueryRow(ctx, `
-		SELECT id, username, email, password_hash, role, avatar_url, bio, created_at, updated_at
+		SELECT id, username, email, password_hash, role, email_verified, avatar_url, bio, created_at, updated_at
 		FROM users WHERE id = $1
 	`, id).Scan(
 		&user.ID, &user.Username, &user.Email, &user.PasswordHash,
-		&user.Role, &user.AvatarURL, &user.Bio, &user.CreatedAt, &user.UpdatedAt,
+		&user.Role, &user.EmailVerified, &user.AvatarURL, &user.Bio, &user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -63,11 +63,11 @@ func (r *UserRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.User, err
 func (r *UserRepo) GetByEmail(ctx context.Context, email string) (*models.User, error) {
 	user := &models.User{}
 	err := r.db.QueryRow(ctx, `
-		SELECT id, username, email, password_hash, role, avatar_url, bio, created_at, updated_at
+		SELECT id, username, email, password_hash, role, email_verified, avatar_url, bio, created_at, updated_at
 		FROM users WHERE email = $1
 	`, email).Scan(
 		&user.ID, &user.Username, &user.Email, &user.PasswordHash,
-		&user.Role, &user.AvatarURL, &user.Bio, &user.CreatedAt, &user.UpdatedAt,
+		&user.Role, &user.EmailVerified, &user.AvatarURL, &user.Bio, &user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -81,11 +81,11 @@ func (r *UserRepo) GetByEmail(ctx context.Context, email string) (*models.User, 
 func (r *UserRepo) GetByUsername(ctx context.Context, username string) (*models.User, error) {
 	user := &models.User{}
 	err := r.db.QueryRow(ctx, `
-		SELECT id, username, email, password_hash, role, avatar_url, bio, created_at, updated_at
+		SELECT id, username, email, password_hash, role, email_verified, avatar_url, bio, created_at, updated_at
 		FROM users WHERE username = $1
 	`, username).Scan(
 		&user.ID, &user.Username, &user.Email, &user.PasswordHash,
-		&user.Role, &user.AvatarURL, &user.Bio, &user.CreatedAt, &user.UpdatedAt,
+		&user.Role, &user.EmailVerified, &user.AvatarURL, &user.Bio, &user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -101,10 +101,10 @@ func (r *UserRepo) UpdateProfile(ctx context.Context, id uuid.UUID, avatarURL, b
 	err := r.db.QueryRow(ctx, `
 		UPDATE users SET avatar_url = COALESCE($2, avatar_url), bio = COALESCE($3, bio), updated_at = NOW()
 		WHERE id = $1
-		RETURNING id, username, email, password_hash, role, avatar_url, bio, created_at, updated_at
+		RETURNING id, username, email, password_hash, role, email_verified, avatar_url, bio, created_at, updated_at
 	`, id, avatarURL, bio).Scan(
 		&user.ID, &user.Username, &user.Email, &user.PasswordHash,
-		&user.Role, &user.AvatarURL, &user.Bio, &user.CreatedAt, &user.UpdatedAt,
+		&user.Role, &user.EmailVerified, &user.AvatarURL, &user.Bio, &user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -114,6 +114,16 @@ func (r *UserRepo) UpdateProfile(ctx context.Context, id uuid.UUID, avatarURL, b
 
 func (r *UserRepo) SetRole(ctx context.Context, id uuid.UUID, role models.UserRole) error {
 	_, err := r.db.Exec(ctx, `UPDATE users SET role = $2, updated_at = NOW() WHERE id = $1`, id, role)
+	return err
+}
+
+func (r *UserRepo) SetEmailVerified(ctx context.Context, userID uuid.UUID) error {
+	_, err := r.db.Exec(ctx, `UPDATE users SET email_verified = TRUE, updated_at = NOW() WHERE id = $1`, userID)
+	return err
+}
+
+func (r *UserRepo) SetPassword(ctx context.Context, userID uuid.UUID, hash string) error {
+	_, err := r.db.Exec(ctx, `UPDATE users SET password_hash = $2, updated_at = NOW() WHERE id = $1`, userID, hash)
 	return err
 }
 

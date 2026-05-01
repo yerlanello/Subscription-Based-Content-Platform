@@ -89,6 +89,14 @@ export const authApi = {
     api.post("/auth/login", data),
   logout: (refreshToken: string) =>
     api.delete("/auth/logout", { data: { refresh_token: refreshToken } }),
+  verifyEmail: (token: string) =>
+    api.post("/auth/verify-email", { token }),
+  resendVerification: () =>
+    api.post("/auth/resend-verification"),
+  forgotPassword: (email: string) =>
+    api.post("/auth/forgot-password", { email }),
+  resetPassword: (token: string, password: string) =>
+    api.post("/auth/reset-password", { token, password }),
 };
 
 // --- Users ---
@@ -208,6 +216,25 @@ export const postsApi = {
   ) => api.post(`/posts/${id}/comments`, data),
   deleteComment: (postId: string, commentId: string) =>
     api.delete(`/posts/${postId}/comments/${commentId}`),
+  likeComment: (postId: string, commentId: string) =>
+    api.post(`/posts/${postId}/comments/${commentId}/like`),
+  unlikeComment: (postId: string, commentId: string) =>
+    api.delete(`/posts/${postId}/comments/${commentId}/like`),
   pin: (id: string) => api.post(`/posts/${id}/pin`),
   unpin: (id: string) => api.delete(`/posts/${id}/pin`),
+};
+
+export const streamsApi = {
+  list: () => api.get("/streams"),
+  get: (id: string) => api.get(`/streams/${id}`),
+  getMine: () => api.get("/streams/my"),
+  getByCreator: (username: string) => api.get(`/streams/by-creator/${username}`),
+  start: (title: string) => api.post("/streams/start", { title }),
+  end: (id: string) => api.post(`/streams/${id}/end`),
+  join: (id: string) => api.post(`/streams/${id}/join`),
+  updateLocation: (id: string, latitude: number, longitude: number) =>
+    api.patch(`/streams/${id}/location`, { latitude, longitude }),
+  getMessages: (id: string) => api.get(`/streams/${id}/messages`),
+  sendMessage: (id: string, message: string, display_name: string) =>
+    api.post(`/streams/${id}/messages`, { message, display_name }),
 };

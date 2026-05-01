@@ -33,8 +33,10 @@ export default function DashboardSettingsPage() {
     },
   });
 
+  const formInitialized = useRef(false);
   useEffect(() => {
-    if (creator?.profile) {
+    if (creator?.profile && !formInitialized.current) {
+      formInitialized.current = true;
       reset({
         display_name: creator.profile.display_name,
         description: creator.profile.description ?? "",
