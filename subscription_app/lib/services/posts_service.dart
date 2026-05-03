@@ -38,4 +38,16 @@ class PostsService {
   static Future<void> unlike(String id) async {
     await ApiClient.delete('/posts/$id/like');
   }
+
+  /// Fetch all posts by a specific creator username.
+  static Future<List<Post>> byCreator(String username) async {
+    final res = await ApiClient.get('/posts?creator=$username');
+    final list = res['data'] as List<dynamic>;
+    return list.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  /// Delete a post by id.
+  static Future<void> delete(String id) async {
+    await ApiClient.delete('/posts/$id');
+  }
 }
