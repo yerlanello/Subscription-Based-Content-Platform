@@ -73,8 +73,13 @@ class PostsService {
     await ApiClient.delete('/posts/$id/like');
   }
 
-  static Future<List<Post>> byCreator(String username) async {
-    final res = await ApiClient.get('/creators/$username/posts');
+  static Future<List<Post>> byCreator(
+    String username, {
+    int limit = 20,
+    int offset = 0,
+  }) async {
+    final res = await ApiClient.get(
+        '/creators/$username/posts?limit=$limit&offset=$offset');
     final list = res['data'] as List<dynamic>;
     return list.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
   }
@@ -94,7 +99,7 @@ class PostsService {
   static Future<Comment> createComment(String postId, String content, {String? parentId}) async {
     final res = await ApiClient.post('/posts/$postId/comments', body: {
       'content': content,
-      if (parentId != null) 'parent_id': parentId,
+      if (parentId case final id?) 'parent_id': id,
     });
     return Comment.fromJson(res['data'] as Map<String, dynamic>);
   }

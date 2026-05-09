@@ -2,25 +2,36 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../l10n/app_localizations.dart';
+import '../models/post.dart';
 import '../services/api_client.dart';
 import '../services/posts_service.dart';
 
-class NewPostPage extends StatefulWidget {
-  const NewPostPage({super.key});
+class EditPostPage extends StatefulWidget {
+  const EditPostPage({super.key, required this.post});
+  final Post post;
 
   @override
-  State<NewPostPage> createState() => _NewPostPageState();
+  State<EditPostPage> createState() => _EditPostPageState();
 }
 
-class _NewPostPageState extends State<NewPostPage> {
-  final _titleController = TextEditingController();
-  final _contentController = TextEditingController();
-  bool _isFree = false;
-  bool _publishNow = true;
+class _EditPostPageState extends State<EditPostPage> {
+  late final TextEditingController _titleController;
+  late final TextEditingController _contentController;
+  late bool _isFree;
+  late List<PostAttachment> _attachments;
+  List<File> _newFiles = [];
   bool _submitting = false;
   bool _uploadingFiles = false;
-  List<File> _pickedFiles = [];
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _titleController = TextEditingController(text: widget.post.title);
+    _contentController = TextEditingController(text: widget.post.content ?? '');
+    _isFree = widget.post.isFree;
+    _attachments = List.from(widget.post.attachments);
+  }
 
   @override
   void dispose() {
@@ -33,7 +44,20 @@ class _NewPostPageState extends State<NewPostPage> {
     final picker = ImagePicker();
     final picked = await picker.pickMultiImage(imageQuality: 85);
     if (picked.isEmpty) return;
-    setState(() => _pickedFiles = picked.map((x) => File(x.path)).toList());
+    setState(() => _newFiles = picked.map((x) => File(x.path)).toList());
+  }
+
+  Future<void> _deleteAttachment(PostAttachment a) async {
+    try {
+      await ApiClient.delete('/posts/${widget.post.id}/attachments/${a.id}');
+      if (mounted) setState(() => _attachments.remove(a));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to delete: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _submit() async {
@@ -44,28 +68,28 @@ class _NewPostPageState extends State<NewPostPage> {
     }
     setState(() { _submitting = true; _error = null; });
     try {
-      final post = await PostsService.create(
+      await PostsService.update(
+        widget.post.id,
         title: title,
-        content: _contentController.text.trim().isEmpty
-            ? null
-            : _contentController.text.trim(),
+        content: _contentController.text.trim().isEmpty ? null : _contentController.text.trim(),
         isFree: _isFree,
       );
 
-      // Upload attachments
-      if (_pickedFiles.isNotEmpty) {
+      if (_newFiles.isNotEmpty) {
         setState(() => _uploadingFiles = true);
-        for (final file in _pickedFiles) {
-          await ApiClient.postMultipart('/posts/${post.id}/attachments', file, 'file');
+        for (final file in _newFiles) {
+          await ApiClient.postMultipart(
+            '/posts/${widget.post.id}/attachments',
+            file,
+            'file',
+          );
         }
         setState(() => _uploadingFiles = false);
       }
 
-      if (_publishNow) await PostsService.publish(post.id);
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_publishNow ? L10n.t('post_published') : L10n.t('draft_saved'))),
+          SnackBar(content: Text(L10n.t('post_saved'))),
         );
         Navigator.of(context).pop(true);
       }
@@ -82,12 +106,12 @@ class _NewPostPageState extends State<NewPostPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(L10n.t('new_post')),
+        title: Text(L10n.t('edit')),
         actions: [
           TextButton(
             onPressed: _submitting ? null : _submit,
             child: _submitting
-                ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                 : Text(L10n.t('save')),
           ),
         ],
@@ -119,24 +143,39 @@ class _NewPostPageState extends State<NewPostPage> {
           ),
           const SizedBox(height: 16),
 
-          // Picked file thumbnails
-          if (_pickedFiles.isNotEmpty) ...[
-            Text('${_pickedFiles.length} image(s) selected',
-                style: Theme.of(context).textTheme.labelMedium),
+          // Existing attachments
+          if (_attachments.isNotEmpty) ...[
+            Text('Attachments', style: Theme.of(context).textTheme.labelMedium),
+            const SizedBox(height: 8),
+            ..._attachments.map((a) => ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.attach_file, size: 18),
+                  title: Text(a.url.split('/').last, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  trailing: IconButton(
+                    icon: Icon(Icons.delete_outline, color: colorScheme.error, size: 18),
+                    onPressed: () => _deleteAttachment(a),
+                  ),
+                )),
+            const SizedBox(height: 8),
+          ],
+
+          // New files picked
+          if (_newFiles.isNotEmpty) ...[
+            Text('New files (${_newFiles.length})', style: Theme.of(context).textTheme.labelMedium),
             const SizedBox(height: 8),
             SizedBox(
               height: 80,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
-                itemCount: _pickedFiles.length,
+                itemCount: _newFiles.length,
                 separatorBuilder: (context, i) => const SizedBox(width: 8),
                 itemBuilder: (context, i) => ClipRRect(
                   borderRadius: BorderRadius.circular(8),
-                  child: Image.file(_pickedFiles[i], width: 80, height: 80, fit: BoxFit.cover),
+                  child: Image.file(_newFiles[i], width: 80, height: 80, fit: BoxFit.cover),
                 ),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
           ],
 
           Card(
@@ -149,22 +188,10 @@ class _NewPostPageState extends State<NewPostPage> {
                   onChanged: (v) => setState(() => _isFree = v),
                 ),
                 const Divider(height: 1),
-                SwitchListTile(
-                  title: Text(L10n.t('publish_immediately')),
-                  subtitle: Text(L10n.t('publish_immediately_subtitle')),
-                  value: _publishNow,
-                  onChanged: (v) => setState(() => _publishNow = v),
-                ),
-                const Divider(height: 1),
                 ListTile(
-                  leading: const Icon(Icons.image_outlined),
+                  leading: const Icon(Icons.attach_file_outlined),
                   title: Text(L10n.t('add_attachments')),
-                  trailing: _pickedFiles.isEmpty
-                      ? const Icon(Icons.chevron_right)
-                      : Badge(
-                          label: Text('${_pickedFiles.length}'),
-                          child: const Icon(Icons.image),
-                        ),
+                  trailing: const Icon(Icons.chevron_right),
                   onTap: _pickFiles,
                 ),
               ],

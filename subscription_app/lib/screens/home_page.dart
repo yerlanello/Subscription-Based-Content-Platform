@@ -1,17 +1,12 @@
 import 'package:flutter/material.dart';
+import '../l10n/app_localizations.dart';
 import '../models/creator.dart';
+import '../services/app_settings_service.dart';
 import '../services/creators_service.dart';
 import 'creator_profile_page.dart';
 
-const _categories = [
-  'All',
-  'Music',
-  'Art',
-  'Podcasts',
-  'Gaming',
-  'Education',
-  'Other',
-];
+const _categories = ['All', 'Music', 'Art', 'Podcasts', 'Gaming', 'Education', 'Other'];
+const _limit = 50;
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -21,26 +16,52 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  List<CreatorWithProfile>? _creators;
+  List<CreatorWithProfile> _creators = [];
   bool _loading = true;
+  bool _loadingMore = false;
+  bool _hasMore = true;
   String? _error;
   String _selectedCategory = 'All';
   String _query = '';
+  int _offset = 0;
+
+  late final ScrollController _scrollController;
 
   @override
   void initState() {
     super.initState();
+    _scrollController = ScrollController()..addListener(_onScroll);
+    AppSettingsService.locale.addListener(_onLocaleChange);
     _load();
   }
 
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    AppSettingsService.locale.removeListener(_onLocaleChange);
+    super.dispose();
+  }
+
+  void _onLocaleChange() => setState(() {});
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
+      _loadMore();
+    }
+  }
+
   Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+    setState(() { _loading = true; _error = null; _offset = 0; _hasMore = true; _creators = []; });
     try {
-      final creators = await CreatorsService.list();
-      if (mounted) setState(() => _creators = creators);
+      final creators = await CreatorsService.list(limit: _limit, offset: 0);
+      if (mounted) {
+        setState(() {
+          _creators = creators;
+          _offset = creators.length;
+          _hasMore = creators.length == _limit;
+        });
+      }
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     } finally {
@@ -48,9 +69,26 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _loadMore() async {
+    if (_loadingMore || !_hasMore || _loading || _query.isNotEmpty || _selectedCategory != 'All') return;
+    setState(() => _loadingMore = true);
+    try {
+      final more = await CreatorsService.list(limit: _limit, offset: _offset);
+      if (mounted) {
+        setState(() {
+          _creators.addAll(more);
+          _offset += more.length;
+          _hasMore = more.length == _limit;
+        });
+      }
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
+    }
+  }
+
   List<CreatorWithProfile> get _filtered {
-    if (_creators == null) return [];
-    return _creators!.where((c) {
+    return _creators.where((c) {
       final matchCat = _selectedCategory == 'All' ||
           (c.profile.category ?? '') == _selectedCategory;
       final q = _query.toLowerCase();
@@ -67,14 +105,10 @@ class _HomePageState extends State<HomePage> {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Xabarla'),
-        centerTitle: false,
-      ),
+      appBar: AppBar(title: const Text('Xabarla'), centerTitle: false),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Hero banner + search
           Container(
             width: double.infinity,
             padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
@@ -114,28 +148,23 @@ class _HomePageState extends State<HomePage> {
               ],
             ),
           ),
-
-          // Category chips
           SizedBox(
             height: 52,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               itemCount: _categories.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              separatorBuilder: (context, i) => const SizedBox(width: 8),
               itemBuilder: (context, i) {
                 final cat = _categories[i];
-                final selected = cat == _selectedCategory;
                 return FilterChip(
                   label: Text(cat),
-                  selected: selected,
+                  selected: cat == _selectedCategory,
                   onSelected: (_) => setState(() => _selectedCategory = cat),
                 );
               },
             ),
           ),
-
-          // Body
           Expanded(child: _buildBody(colorScheme)),
         ],
       ),
@@ -143,9 +172,8 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildBody(ColorScheme colorScheme) {
-    if (_loading) {
-      return const Center(child: CircularProgressIndicator());
-    }
+    if (_loading) return const Center(child: CircularProgressIndicator());
+
     if (_error != null) {
       return Center(
         child: Column(
@@ -158,25 +186,26 @@ class _HomePageState extends State<HomePage> {
               child: Text(_error!, textAlign: TextAlign.center),
             ),
             const SizedBox(height: 16),
-            FilledButton(onPressed: _load, child: const Text('Retry')),
+            FilledButton(onPressed: _load, child: Text(L10n.t('retry'))),
           ],
         ),
       );
     }
+
     final filtered = _filtered;
     if (filtered.isEmpty) {
       return Center(
         child: Text(
-          _creators?.isEmpty == true
-              ? 'No creators yet.'
-              : 'No creators match your search.',
+          _creators.isEmpty ? 'No creators yet.' : 'No creators match your search.',
           style: TextStyle(color: colorScheme.outline),
         ),
       );
     }
+
     return RefreshIndicator(
       onRefresh: _load,
       child: GridView.builder(
+        controller: _scrollController,
         padding: const EdgeInsets.all(16),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
@@ -184,16 +213,20 @@ class _HomePageState extends State<HomePage> {
           mainAxisSpacing: 12,
           childAspectRatio: 0.72,
         ),
-        itemCount: filtered.length,
-        itemBuilder: (context, i) => _CreatorCard(
-          creator: filtered[i],
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) =>
-                  CreatorProfilePage(username: filtered[i].user.username),
+        itemCount: filtered.length + (_loadingMore ? 1 : 0),
+        itemBuilder: (context, i) {
+          if (i == filtered.length) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          return _CreatorCard(
+            creator: filtered[i],
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => CreatorProfilePage(username: filtered[i].user.username),
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -216,13 +249,11 @@ class _CreatorCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Cover / avatar area
             Container(
               height: 80,
               color: colorScheme.secondaryContainer,
               child: profile.coverUrl != null
-                  ? Image.network(profile.coverUrl!,
-                      fit: BoxFit.cover, width: double.infinity)
+                  ? Image.network(profile.coverUrl!, fit: BoxFit.cover, width: double.infinity)
                   : Center(
                       child: CircleAvatar(
                         radius: 28,
@@ -248,45 +279,36 @@ class _CreatorCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    profile.displayName,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    '@${creator.user.username}',
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: colorScheme.outline),
-                  ),
+                  Text(profile.displayName,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                  Text('@${creator.user.username}',
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: colorScheme.outline)),
                   if (profile.category != null) ...[
                     const SizedBox(height: 6),
                     Chip(
-                      label: Text(profile.category!,
-                          style: const TextStyle(fontSize: 11)),
+                      label: Text(profile.category!, style: const TextStyle(fontSize: 11)),
                       padding: EdgeInsets.zero,
                       visualDensity: VisualDensity.compact,
                     ),
                   ],
                   if (profile.description != null) ...[
                     const SizedBox(height: 4),
-                    Text(
-                      profile.description!,
-                      style: Theme.of(context).textTheme.bodySmall,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    Text(profile.description!,
+                        style: Theme.of(context).textTheme.bodySmall,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis),
                   ],
                   const SizedBox(height: 8),
                   Text(
                     profile.priceLabel,
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
-                      color: profile.isFree
-                          ? Colors.green
-                          : colorScheme.primary,
+                      color: profile.isFree ? Colors.green : colorScheme.primary,
                       fontSize: 12,
                     ),
                   ),

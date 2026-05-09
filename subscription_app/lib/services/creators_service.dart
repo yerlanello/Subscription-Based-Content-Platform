@@ -40,6 +40,16 @@ class CreatorsService {
     await ApiClient.post('/creators', body: {'display_name': displayName});
   }
 
+  /// Follow a creator.
+  static Future<void> follow(String username) async {
+    await ApiClient.post('/creators/$username/follow');
+  }
+
+  /// Unfollow a creator.
+  static Future<void> unfollow(String username) async {
+    await ApiClient.delete('/creators/$username/follow');
+  }
+
   /// Fetch posts published by a specific creator.
   static Future<List<Post>> getPosts(
     String username, {

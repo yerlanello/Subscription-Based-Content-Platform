@@ -1,8 +1,14 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import '../l10n/app_localizations.dart';
 import '../models/user.dart';
+import '../services/api_client.dart';
 import '../services/auth_service.dart';
 import '../widgets/become_creator_dialog.dart';
+import 'edit_profile_page.dart';
 import 'new_post_page.dart';
+import 'notifications_page.dart';
 
 class AccountPage extends StatefulWidget {
   const AccountPage({super.key});
@@ -14,8 +20,12 @@ class AccountPage extends StatefulWidget {
 class _AccountPageState extends State<AccountPage> {
   String? _username;
   String? _email;
+  String? _avatarUrl;
   UserRole _role = UserRole.patron;
+  int _subscriptionsCount = 0;
+  int _followingCount = 0;
   bool _loading = true;
+  bool _uploadingAvatar = false;
 
   @override
   void initState() {
@@ -24,16 +34,34 @@ class _AccountPageState extends State<AccountPage> {
   }
 
   Future<void> _load() async {
-    final username = await AuthService.getUsername();
-    final email = await AuthService.getEmail();
-    final roleStr = await AuthService.getRole();
-    if (mounted) {
-      setState(() {
-        _username = username;
-        _email = email;
-        _role = _parseRole(roleStr);
-        _loading = false;
-      });
+    setState(() => _loading = true);
+    try {
+      final username = await AuthService.getUsername();
+      final email = await AuthService.getEmail();
+      final roleStr = await AuthService.getRole();
+      final cachedAvatar = await AuthService.getAvatarUrl();
+
+      if (mounted) {
+        setState(() {
+          _username = username;
+          _email = email;
+          _role = _parseRole(roleStr);
+          _avatarUrl = cachedAvatar;
+          _loading = false;
+        });
+      }
+
+      // Fetch live stats in background
+      final stats = await AuthService.getMe();
+      if (mounted) {
+        setState(() {
+          _subscriptionsCount = stats.subscriptionsCount;
+          _followingCount = stats.followingCount;
+          _avatarUrl = stats.avatarUrl;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -48,191 +76,236 @@ class _AccountPageState extends State<AccountPage> {
     }
   }
 
-  bool get _isCreator =>
-      _role == UserRole.creator || _role == UserRole.both;
+  bool get _isCreator => _role == UserRole.creator || _role == UserRole.both;
+
+  Future<void> _pickAvatar() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+    if (picked == null) return;
+    setState(() => _uploadingAvatar = true);
+    try {
+      final res = await ApiClient.postMultipart('/users/me/avatar', File(picked.path), 'avatar');
+      final url = (res['data'] as Map<String, dynamic>?)?['avatar_url'] as String?;
+      await AuthService.saveAvatarUrl(url);
+      if (mounted) setState(() => _avatarUrl = url);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingAvatar = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Account')),
+      appBar: AppBar(
+        title: Text(L10n.t('account')),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.notifications_outlined),
+            tooltip: L10n.t('notifications'),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const NotificationsPage()),
+            ),
+          ),
+        ],
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              children: [
-                // Profile header
-                Container(
-                  color: colorScheme.primaryContainer,
-                  padding: const EdgeInsets.symmetric(vertical: 32),
-                  child: Column(
-                    children: [
-                      CircleAvatar(
-                        radius: 44,
-                        backgroundColor: colorScheme.primary,
-                        child: Text(
-                          (_username ?? '?')[0].toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 36,
-                            fontWeight: FontWeight.bold,
-                            color: colorScheme.onPrimary,
-                          ),
+          : RefreshIndicator(
+              onRefresh: _load,
+              child: ListView(
+                children: [
+                  // Profile header
+                  Container(
+                    color: colorScheme.primaryContainer,
+                    padding: const EdgeInsets.symmetric(vertical: 32),
+                    child: Column(
+                      children: [
+                        Stack(
+                          children: [
+                            CircleAvatar(
+                              radius: 44,
+                              backgroundColor: colorScheme.primary,
+                              backgroundImage:
+                                  _avatarUrl != null ? NetworkImage(_avatarUrl!) : null,
+                              child: _avatarUrl == null
+                                  ? Text(
+                                      (_username ?? '?')[0].toUpperCase(),
+                                      style: TextStyle(
+                                          fontSize: 36,
+                                          fontWeight: FontWeight.bold,
+                                          color: colorScheme.onPrimary),
+                                    )
+                                  : null,
+                            ),
+                            if (_uploadingAvatar)
+                              const Positioned.fill(
+                                child: CircleAvatar(
+                                  radius: 44,
+                                  backgroundColor: Colors.black38,
+                                  child: CircularProgressIndicator(color: Colors.white),
+                                ),
+                              ),
+                          ],
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        _username ?? 'Unknown',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: colorScheme.onPrimaryContainer,
-                            ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _email ?? '',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: colorScheme.onPrimaryContainer.withAlpha(180),
-                            ),
-                      ),
-                    ],
+                        const SizedBox(height: 12),
+                        Text(
+                          _username ?? 'Unknown',
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: colorScheme.onPrimaryContainer,
+                              ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _email ?? '',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: colorScheme.onPrimaryContainer.withAlpha(180),
+                              ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
 
-                const SizedBox(height: 16),
+                  const SizedBox(height: 16),
 
-                // Role badge + stats row
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    children: [
-                      _StatCard(label: 'Subscriptions', value: '—'),
-                      const SizedBox(width: 12),
-                      _StatCard(label: 'Following', value: '—'),
-                      const SizedBox(width: 12),
-                      _StatCard(
-                        label: 'Role',
-                        value: _role == UserRole.both
-                            ? 'Both'
-                            : _role == UserRole.creator
-                                ? 'Creator'
-                                : 'Patron',
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-
-                // Creator actions (only for creators)
-                if (_isCreator) ...[
+                  // Stats
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Text(
-                      'CREATOR',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: colorScheme.outline,
-                            letterSpacing: 1.2,
-                          ),
+                    child: Row(
+                      children: [
+                        _StatCard(label: L10n.t('subscriptions'), value: '$_subscriptionsCount'),
+                        const SizedBox(width: 12),
+                        _StatCard(label: L10n.t('following_count'), value: '$_followingCount'),
+                        const SizedBox(width: 12),
+                        _StatCard(
+                          label: L10n.t('role'),
+                          value: _role == UserRole.both
+                              ? 'Both'
+                              : _role == UserRole.creator
+                                  ? 'Creator'
+                                  : 'Patron',
+                        ),
+                      ],
                     ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Creator section
+                  if (_isCreator) ...[
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(L10n.t('creator'),
+                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                color: colorScheme.outline, letterSpacing: 1.2)),
+                    ),
+                    const SizedBox(height: 8),
+                    Card(
+                      margin: const EdgeInsets.symmetric(horizontal: 16),
+                      child: ListTile(
+                        leading: const Icon(Icons.add_box_outlined),
+                        title: Text(L10n.t('new_post')),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () async {
+                          final created = await Navigator.of(context).push<bool>(
+                            MaterialPageRoute(builder: (_) => const NewPostPage()),
+                          );
+                          if (created == true && mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(L10n.t('post_saved'))),
+                            );
+                          }
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // Profile section
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Text(L10n.t('profile'),
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: colorScheme.outline, letterSpacing: 1.2)),
+                  ),
+                  const SizedBox(height: 8),
+                  Card(
+                    margin: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Column(
+                      children: [
+                        ListTile(
+                          leading: const Icon(Icons.edit_outlined),
+                          title: Text(L10n.t('edit_profile')),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () async {
+                            final changed = await Navigator.of(context).push<bool>(
+                              MaterialPageRoute(builder: (_) => const EditProfilePage()),
+                            );
+                            if (changed == true) _load();
+                          },
+                        ),
+                        const Divider(height: 1, indent: 56),
+                        ListTile(
+                          leading: const Icon(Icons.photo_camera_outlined),
+                          title: Text(L10n.t('change_avatar')),
+                          trailing: _uploadingAvatar
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.chevron_right),
+                          onTap: _uploadingAvatar ? null : _pickAvatar,
+                        ),
+                        if (!_isCreator) ...[
+                          const Divider(height: 1, indent: 56),
+                          ListTile(
+                            leading: const Icon(Icons.star_outline),
+                            title: Text(L10n.t('become_creator')),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () async {
+                              if (!mounted) return;
+                              final success = await BecomeCreatorDialog.show(context);
+                              if (!mounted) return;
+                              if (success) {
+                                await AuthService.saveRole('creator');
+                                _load();
+                              }
+                            },
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Text(L10n.t('subscriptions').toUpperCase(),
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: colorScheme.outline, letterSpacing: 1.2)),
                   ),
                   const SizedBox(height: 8),
                   Card(
                     margin: const EdgeInsets.symmetric(horizontal: 16),
                     child: ListTile(
-                      leading: const Icon(Icons.add_box_outlined),
-                      title: const Text('New Post'),
+                      leading: const Icon(Icons.subscriptions_outlined),
+                      title: Text(L10n.t('my_subscriptions')),
                       trailing: const Icon(Icons.chevron_right),
-                      onTap: () async {
-                        final created = await Navigator.of(context).push<bool>(
-                          MaterialPageRoute(
-                              builder: (_) => const NewPostPage()),
-                        );
-                        if (created == true && mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Post saved!')),
-                          );
-                        }
-                      },
+                      onTap: () {},
                     ),
                   ),
-                  const SizedBox(height: 16),
+
+                  const SizedBox(height: 32),
                 ],
-
-                // Profile section
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Text(
-                    'PROFILE',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: colorScheme.outline,
-                          letterSpacing: 1.2,
-                        ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Column(
-                    children: [
-                      ListTile(
-                        leading: const Icon(Icons.edit_outlined),
-                        title: const Text('Edit Profile'),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () {},
-                      ),
-                      const Divider(height: 1, indent: 56),
-                      ListTile(
-                        leading: const Icon(Icons.photo_camera_outlined),
-                        title: const Text('Change Avatar'),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () {},
-                      ),
-                      if (!_isCreator) ...[
-                        const Divider(height: 1, indent: 56),
-                        ListTile(
-                          leading: const Icon(Icons.star_outline),
-                          title: const Text('Become a Creator'),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () async {
-                            final success =
-                                await BecomeCreatorDialog.show(context);
-                            if (!mounted) return;
-                            if (success) {
-                              await AuthService.saveRole('creator');
-                              _load();
-                            }
-                          },
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Text(
-                    'SUBSCRIPTIONS',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: colorScheme.outline,
-                          letterSpacing: 1.2,
-                        ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 16),
-                  child: ListTile(
-                    leading: const Icon(Icons.subscriptions_outlined),
-                    title: const Text('My Subscriptions'),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () {},
-                  ),
-                ),
-
-                const SizedBox(height: 32),
-              ],
+              ),
             ),
     );
   }
@@ -251,19 +324,15 @@ class _StatCard extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 16),
           child: Column(
             children: [
-              Text(
-                value,
-                style: Theme.of(context)
-                    .textTheme
-                    .titleLarge
-                    ?.copyWith(fontWeight: FontWeight.bold),
-              ),
+              Text(value,
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleLarge
+                      ?.copyWith(fontWeight: FontWeight.bold)),
               const SizedBox(height: 4),
-              Text(
-                label,
-                style: Theme.of(context).textTheme.bodySmall,
-                textAlign: TextAlign.center,
-              ),
+              Text(label,
+                  style: Theme.of(context).textTheme.bodySmall,
+                  textAlign: TextAlign.center),
             ],
           ),
         ),

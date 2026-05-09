@@ -134,6 +134,59 @@ class _PostCardState extends State<PostCard> {
                 overflow: TextOverflow.ellipsis,
               ),
 
+            // Attachment thumbnails (images only)
+            if (post.attachments.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 80,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: post.attachments.length,
+                  separatorBuilder: (context, i) => const SizedBox(width: 6),
+                  itemBuilder: (context, i) {
+                    final att = post.attachments[i];
+                    final isImage = att.mimeType?.startsWith('image/') ?? true;
+                    if (isImage) {
+                      return ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: Image.network(
+                          att.url,
+                          width: 80,
+                          height: 80,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stack) => Container(
+                            width: 80,
+                            height: 80,
+                            color: colorScheme.surfaceContainerHighest,
+                            child: Icon(Icons.broken_image_outlined,
+                                color: colorScheme.outline),
+                          ),
+                        ),
+                      );
+                    }
+                    return Container(
+                      width: 80,
+                      height: 80,
+                      decoration: BoxDecoration(
+                        color: colorScheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.attach_file, color: colorScheme.outline),
+                          const SizedBox(height: 4),
+                          Text(att.mimeType ?? 'file',
+                              style: TextStyle(fontSize: 9, color: colorScheme.outline),
+                              textAlign: TextAlign.center),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+
             // Timestamp
             const SizedBox(height: 6),
             Text(

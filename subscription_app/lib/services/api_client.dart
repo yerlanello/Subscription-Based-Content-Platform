@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'auth_service.dart';
 
@@ -102,4 +103,34 @@ class ApiClient {
 
   static Future<Map<String, dynamic>> delete(String path) =>
       _withRefresh((h) => http.delete(Uri.parse('$_base$path'), headers: h));
+
+  /// Upload a file via multipart/form-data. Handles token refresh like other methods.
+  static Future<Map<String, dynamic>> postMultipart(
+    String path,
+    File file,
+    String fieldName,
+  ) async {
+    Future<http.Response> send(Map<String, String> headers) async {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$_base$path'),
+      );
+      final token = await AuthService.getAccessToken();
+      if (token != null) request.headers['Authorization'] = 'Bearer $token';
+      request.files.add(await http.MultipartFile.fromPath(fieldName, file.path));
+      final streamed = await request.send();
+      return http.Response.fromStream(streamed);
+    }
+
+    var res = await send(await _headers());
+    if (res.statusCode == 401) {
+      final refreshed = await _tryRefresh();
+      if (!refreshed) {
+        await AuthService.clearTokens();
+        throw 'Session expired. Please log in again.';
+      }
+      res = await send(await _headers());
+    }
+    return _parse(res);
+  }
 }

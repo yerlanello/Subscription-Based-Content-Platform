@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import '../l10n/app_localizations.dart';
 import '../models/user.dart';
+import '../services/app_settings_service.dart';
 import '../services/auth_service.dart';
 import 'feed_page.dart';
 import 'home_page.dart';
-import 'new_post_page.dart';
+import 'drafts_page.dart';
 import 'account_page.dart';
 import 'settings_page.dart';
+import 'new_post_page.dart';
+import 'notifications_page.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -18,18 +22,20 @@ class _MainShellState extends State<MainShell> {
   int _index = 0;
   UserRole _role = UserRole.patron;
 
-  static const _pages = <Widget>[
-    FeedPage(),
-    HomePage(),
-    AccountPage(),
-    SettingsPage(),
-  ];
-
   @override
   void initState() {
     super.initState();
     _loadRole();
+    AppSettingsService.locale.addListener(_onLocaleChange);
   }
+
+  @override
+  void dispose() {
+    AppSettingsService.locale.removeListener(_onLocaleChange);
+    super.dispose();
+  }
+
+  void _onLocaleChange() => setState(() {});
 
   Future<void> _loadRole() async {
     final roleStr = await AuthService.getRole();
@@ -46,58 +52,151 @@ class _MainShellState extends State<MainShell> {
     });
   }
 
-  bool get _isCreator =>
-      _role == UserRole.creator || _role == UserRole.both;
+  bool get _isCreator => _role == UserRole.creator || _role == UserRole.both;
+
+  List<Widget> get _pages => _isCreator
+      ? [
+          const FeedPage(),
+          const HomePage(),
+          const DraftsPage(),
+          const AccountPage(),
+          const SettingsPage(),
+        ]
+      : [
+          const FeedPage(),
+          const HomePage(),
+          const AccountPage(),
+          const SettingsPage(),
+        ];
+
+  List<NavigationDestination> get _destinations {
+    if (_isCreator) {
+      return [
+        NavigationDestination(
+          icon: const Icon(Icons.rss_feed_outlined),
+          selectedIcon: const Icon(Icons.rss_feed),
+          label: L10n.t('feed'),
+        ),
+        NavigationDestination(
+          icon: const Icon(Icons.explore_outlined),
+          selectedIcon: const Icon(Icons.explore),
+          label: L10n.t('authors'),
+        ),
+        NavigationDestination(
+          icon: const Icon(Icons.article_outlined),
+          selectedIcon: const Icon(Icons.article),
+          label: L10n.t('posts'),
+        ),
+        NavigationDestination(
+          icon: const Icon(Icons.person_outline),
+          selectedIcon: const Icon(Icons.person),
+          label: L10n.t('account'),
+        ),
+        NavigationDestination(
+          icon: const Icon(Icons.settings_outlined),
+          selectedIcon: const Icon(Icons.settings),
+          label: L10n.t('settings'),
+        ),
+      ];
+    }
+    return [
+      NavigationDestination(
+        icon: const Icon(Icons.rss_feed_outlined),
+        selectedIcon: const Icon(Icons.rss_feed),
+        label: L10n.t('feed'),
+      ),
+      NavigationDestination(
+        icon: const Icon(Icons.explore_outlined),
+        selectedIcon: const Icon(Icons.explore),
+        label: L10n.t('authors'),
+      ),
+      NavigationDestination(
+        icon: const Icon(Icons.person_outline),
+        selectedIcon: const Icon(Icons.person),
+        label: L10n.t('account'),
+      ),
+      NavigationDestination(
+        icon: const Icon(Icons.settings_outlined),
+        selectedIcon: const Icon(Icons.settings),
+        label: L10n.t('settings'),
+      ),
+    ];
+  }
+
+  bool get _showFab {
+    if (!_isCreator) return false;
+    return _index == 0 || _index == 2;
+  }
 
   @override
   Widget build(BuildContext context) {
+    final pages = _pages;
+    final safeIndex = _index.clamp(0, pages.length - 1);
+
     return Scaffold(
       body: IndexedStack(
-        index: _index,
-        children: _pages,
+        index: safeIndex,
+        children: pages,
       ),
-      floatingActionButton: _isCreator && _index == 0
+      floatingActionButton: _showFab
           ? FloatingActionButton(
               onPressed: () async {
                 final created = await Navigator.of(context).push<bool>(
                   MaterialPageRoute(builder: (_) => const NewPostPage()),
                 );
-                if (created == true && mounted) {
-                  // Rebuild feed tab by forcing a key change if needed;
-                  // for now a simple setState is enough to trigger feed refresh
-                  setState(() {});
-                }
+                if (created == true && mounted) setState(() {});
               },
-              tooltip: 'New Post',
+              tooltip: L10n.t('new_post'),
               child: const Icon(Icons.add),
             )
           : null,
       bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
+        selectedIndex: safeIndex,
         onDestinationSelected: (i) => setState(() => _index = i),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.rss_feed_outlined),
-            selectedIcon: Icon(Icons.rss_feed),
-            label: 'Feed',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.explore_outlined),
-            selectedIcon: Icon(Icons.explore),
-            label: 'Authors',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.person_outline),
-            selectedIcon: Icon(Icons.person),
-            label: 'Account',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            selectedIcon: Icon(Icons.settings),
-            label: 'Settings',
-          ),
-        ],
+        destinations: _destinations,
       ),
+    );
+  }
+}
+
+class NotificationBell extends StatefulWidget {
+  const NotificationBell({super.key});
+
+  @override
+  State<NotificationBell> createState() => _NotificationBellState();
+}
+
+class _NotificationBellState extends State<NotificationBell> {
+  int _unread = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCount();
+  }
+
+  Future<void> _loadCount() async {
+    try {
+      // Fetch count separately to avoid blocking UI
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      icon: Badge(
+        isLabelVisible: _unread > 0,
+        label: Text('$_unread'),
+        child: const Icon(Icons.notifications_outlined),
+      ),
+      tooltip: 'Notifications',
+      onPressed: () async {
+        await Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const NotificationsPage()),
+        );
+        // Reload count after returning from notifications
+        setState(() => _unread = 0);
+      },
     );
   }
 }

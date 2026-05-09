@@ -7,7 +7,8 @@
       "Bash(npm install:*)",
       "Bash(go get:*)",
       "Bash(go mod:*)",
-      "Bash(docker compose:*)"
+      "Bash(docker compose:*)",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Projects\\\\Subscription-Based-Content-Platform\" -Force | Select-Object Name, @{Name=\"Type\";Expression={if\\($_.PSIsContainer\\){\"Dir\"}else{\"File\"}}} | Format-Table -AutoSize)"
     ]
   }
 }
