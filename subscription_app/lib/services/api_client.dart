@@ -2,12 +2,11 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'auth_service.dart';
 
-/// Thin HTTP client that attaches the stored access token to every request.
-/// Matches the base URL used in AuthService.
 class ApiClient {
   static const _base = 'http://localhost:8080/api';
 
-  // ---------- helpers ----------
+  // Prevent concurrent refresh calls.
+  static bool _refreshing = false;
 
   static Future<Map<String, String>> _headers() async {
     final token = await AuthService.getAccessToken();
@@ -17,51 +16,90 @@ class ApiClient {
     };
   }
 
-  static Map<String, dynamic> _handle(http.Response res) {
+  // Returns true if refresh succeeded and new tokens were saved.
+  static Future<bool> _tryRefresh() async {
+    if (_refreshing) return false;
+    _refreshing = true;
+    try {
+      final refreshToken = await AuthService.getRefreshToken();
+      if (refreshToken == null) return false;
+      final res = await http.post(
+        Uri.parse('$_base/auth/refresh'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'refresh_token': refreshToken}),
+      );
+      if (res.statusCode < 200 || res.statusCode >= 300) return false;
+      final body = jsonDecode(res.body) as Map<String, dynamic>;
+      final data = body['data'] as Map<String, dynamic>;
+      await AuthService.saveTokens(
+        data['access_token'] as String,
+        data['refresh_token'] as String,
+      );
+      return true;
+    } catch (_) {
+      return false;
+    } finally {
+      _refreshing = false;
+    }
+  }
+
+  static Map<String, dynamic> _parse(http.Response res) {
     final body = jsonDecode(res.body) as Map<String, dynamic>;
     if (res.statusCode >= 200 && res.statusCode < 300) return body;
     throw body['error'] as String? ?? 'Request failed (${res.statusCode})';
   }
 
-  // ---------- verbs ----------
-
-  static Future<Map<String, dynamic>> get(String path) async {
-    final res = await http.get(
-      Uri.parse('$_base$path'),
-      headers: await _headers(),
-    );
-    return _handle(res);
+  // Executes [fn], and if it returns a 401 attempts one token refresh then retries.
+  static Future<Map<String, dynamic>> _withRefresh(
+    Future<http.Response> Function(Map<String, String> headers) fn,
+  ) async {
+    var headers = await _headers();
+    var res = await fn(headers);
+    if (res.statusCode == 401) {
+      final refreshed = await _tryRefresh();
+      if (!refreshed) {
+        await AuthService.clearTokens();
+        throw 'Session expired. Please log in again.';
+      }
+      headers = await _headers();
+      res = await fn(headers);
+    }
+    return _parse(res);
   }
+
+  static Future<Map<String, dynamic>> get(String path) =>
+      _withRefresh((h) => http.get(Uri.parse('$_base$path'), headers: h));
 
   static Future<Map<String, dynamic>> post(
     String path, {
     Map<String, dynamic>? body,
-  }) async {
-    final res = await http.post(
-      Uri.parse('$_base$path'),
-      headers: await _headers(),
-      body: body != null ? jsonEncode(body) : null,
-    );
-    return _handle(res);
-  }
+  }) =>
+      _withRefresh((h) => http.post(
+            Uri.parse('$_base$path'),
+            headers: h,
+            body: body != null ? jsonEncode(body) : null,
+          ));
 
   static Future<Map<String, dynamic>> put(
     String path, {
     Map<String, dynamic>? body,
-  }) async {
-    final res = await http.put(
-      Uri.parse('$_base$path'),
-      headers: await _headers(),
-      body: body != null ? jsonEncode(body) : null,
-    );
-    return _handle(res);
-  }
+  }) =>
+      _withRefresh((h) => http.put(
+            Uri.parse('$_base$path'),
+            headers: h,
+            body: body != null ? jsonEncode(body) : null,
+          ));
 
-  static Future<Map<String, dynamic>> delete(String path) async {
-    final res = await http.delete(
-      Uri.parse('$_base$path'),
-      headers: await _headers(),
-    );
-    return _handle(res);
-  }
+  static Future<Map<String, dynamic>> patch(
+    String path, {
+    Map<String, dynamic>? body,
+  }) =>
+      _withRefresh((h) => http.patch(
+            Uri.parse('$_base$path'),
+            headers: h,
+            body: body != null ? jsonEncode(body) : null,
+          ));
+
+  static Future<Map<String, dynamic>> delete(String path) =>
+      _withRefresh((h) => http.delete(Uri.parse('$_base$path'), headers: h));
 }

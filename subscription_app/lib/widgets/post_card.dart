@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/post.dart';
+import '../screens/post_detail_page.dart';
 import '../services/posts_service.dart';
 
 class PostCard extends StatefulWidget {
@@ -50,7 +51,12 @@ class _PostCardState extends State<PostCard> {
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      child: Padding(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => PostDetailPage(post: post),
+        )),
+        child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -174,6 +180,7 @@ class _PostCardState extends State<PostCard> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

@@ -57,6 +57,12 @@ class AuthService {
     return prefs.getString(_keyAccess);
   }
 
+  /// Retrieve the stored refresh token, or null if not logged in.
+  static Future<String?> getRefreshToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keyRefresh);
+  }
+
   /// Persist basic user info to local storage.
   static Future<void> saveUser(String username, String email) async {
     final prefs = await SharedPreferences.getInstance();
