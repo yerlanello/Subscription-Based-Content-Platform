@@ -5,19 +5,19 @@ import 'api_client.dart';
 class PostsService {
   static Future<List<Post>> feed({int limit = 20, int offset = 0}) async {
     final res = await ApiClient.get('/posts/feed?limit=$limit&offset=$offset');
-    final list = res['data'] as List<dynamic>;
+    final list = (res['data'] as List<dynamic>?) ?? [];
     return list.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   static Future<List<Post>> explore({int limit = 20, int offset = 0}) async {
     final res = await ApiClient.get('/posts/explore?limit=$limit&offset=$offset');
-    final list = res['data'] as List<dynamic>;
+    final list = (res['data'] as List<dynamic>?) ?? [];
     return list.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   static Future<List<Post>> recommended({int limit = 20, int offset = 0}) async {
     final res = await ApiClient.get('/posts/recommended?limit=$limit&offset=$offset');
-    final list = res['data'] as List<dynamic>;
+    final list = (res['data'] as List<dynamic>?) ?? [];
     return list.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
   }
 
@@ -80,7 +80,7 @@ class PostsService {
   }) async {
     final res = await ApiClient.get(
         '/creators/$username/posts?limit=$limit&offset=$offset');
-    final list = res['data'] as List<dynamic>;
+    final list = (res['data'] as List<dynamic>?) ?? [];
     return list.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
   }
 
@@ -92,7 +92,7 @@ class PostsService {
 
   static Future<List<Comment>> getComments(String postId) async {
     final res = await ApiClient.get('/posts/$postId/comments');
-    final list = res['data'] as List<dynamic>;
+    final list = (res['data'] as List<dynamic>?) ?? [];
     return list.map((e) => Comment.fromJson(e as Map<String, dynamic>)).toList();
   }
 

@@ -1,3 +1,5 @@
+import '../config/app_config.dart';
+
 class PostAttachment {
   final String id;
   final String postId;
@@ -13,13 +15,16 @@ class PostAttachment {
     this.sizeBytes,
   });
 
-  factory PostAttachment.fromJson(Map<String, dynamic> json) => PostAttachment(
-        id: json['id'] as String,
-        postId: json['post_id'] as String,
-        url: json['url'] as String,
-        mimeType: json['mime_type'] as String?,
-        sizeBytes: json['size_bytes'] as int?,
-      );
+  factory PostAttachment.fromJson(Map<String, dynamic> json) {
+    final url = AppConfig.absoluteUrl(json['url'] as String);
+    return PostAttachment(
+      id: json['id'] as String,
+      postId: json['post_id'] as String,
+      url: url,
+      mimeType: json['mime_type'] as String?,
+      sizeBytes: json['size_bytes'] as int?,
+    );
+  }
 }
 
 class PostCreator {

@@ -1,25 +1,26 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../config/app_config.dart';
 
 class UserStats {
   final int subscriptionsCount;
   final int followingCount;
   final String? avatarUrl;
   final String? bio;
+  final bool emailVerified;
 
   const UserStats({
     required this.subscriptionsCount,
     required this.followingCount,
     this.avatarUrl,
     this.bio,
+    this.emailVerified = false,
   });
 }
 
 class AuthService {
-  // Android emulator: 10.0.2.2 maps to host machine's localhost.
-  // Change to 'localhost' for Flutter web or iOS simulator.
-  static const _base = 'http://localhost:8080/api';
+  static const _base = AppConfig.baseUrl;
 
   static const _keyAccess = 'access_token';
   static const _keyRefresh = 'refresh_token';
@@ -27,6 +28,7 @@ class AuthService {
   static const _keyEmail = 'email';
   static const _keyRole = 'role';
   static const _keyAvatarUrl = 'avatar_url';
+  static const _keyEmailVerified = 'email_verified';
 
   /// Login with email and password. Returns the response data map.
   /// Throws a [String] error message on failure.
@@ -79,10 +81,63 @@ class AuthService {
   }
 
   /// Persist basic user info to local storage.
-  static Future<void> saveUser(String username, String email) async {
+  static Future<void> saveUser(
+    String username,
+    String email, {
+    bool emailVerified = false,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyUsername, username);
     await prefs.setString(_keyEmail, email);
+    await prefs.setBool(_keyEmailVerified, emailVerified);
+  }
+
+  static Future<void> saveEmailVerified(bool verified) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyEmailVerified, verified);
+  }
+
+  static Future<bool> getEmailVerified() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_keyEmailVerified) ?? false;
+  }
+
+  /// Change the authenticated user's password.
+  static Future<void> changePassword(String currentPassword, String newPassword) async {
+    final token = await getAccessToken();
+    if (token == null) throw 'Not logged in';
+    final res = await http.put(
+      Uri.parse('$_base/auth/change-password'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({
+        'current_password': currentPassword,
+        'new_password': newPassword,
+      }),
+    );
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      final body = jsonDecode(res.body) as Map<String, dynamic>;
+      throw body['error'] as String? ?? 'Failed to change password';
+    }
+  }
+
+  /// Request a new verification email for the currently authenticated user.
+  static Future<void> resendVerification() async {
+    final token = await getAccessToken();
+    if (token == null) throw 'Not logged in';
+    final res = await http.post(
+      Uri.parse('$_base/auth/resend-verification'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      final body = jsonDecode(res.body) as Map<String, dynamic>;
+      throw body['error'] as String? ?? 'Failed to resend verification email';
+    }
   }
 
   static Future<String?> getUsername() async {
@@ -138,12 +193,15 @@ class AuthService {
     }
     final data = body['data'] as Map<String, dynamic>;
     final avatarUrl = data['avatar_url'] as String?;
+    final emailVerified = data['email_verified'] as bool? ?? false;
     await saveAvatarUrl(avatarUrl);
+    await saveEmailVerified(emailVerified);
     return UserStats(
       subscriptionsCount: data['subscriptions_count'] as int? ?? 0,
       followingCount: data['following_count'] as int? ?? 0,
       avatarUrl: avatarUrl,
       bio: data['bio'] as String?,
+      emailVerified: emailVerified,
     );
   }
 
@@ -174,5 +232,6 @@ class AuthService {
     await prefs.remove(_keyEmail);
     await prefs.remove(_keyRole);
     await prefs.remove(_keyAvatarUrl);
+    await prefs.remove(_keyEmailVerified);
   }
 }

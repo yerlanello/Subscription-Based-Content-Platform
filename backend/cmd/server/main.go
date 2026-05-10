@@ -154,6 +154,7 @@ func main() {
 			r.With(authMiddleware).Delete("/logout-all", authH.LogoutAll)
 			r.Post("/verify-email", authH.VerifyEmail)
 			r.With(authMiddleware).Post("/resend-verification", authH.ResendVerification)
+			r.With(authMiddleware).Put("/change-password", authH.ChangePassword)
 			r.Post("/forgot-password", authH.ForgotPassword)
 			r.Post("/reset-password", authH.ResetPassword)
 		})

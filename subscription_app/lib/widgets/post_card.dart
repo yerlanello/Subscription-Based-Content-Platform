@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import '../l10n/app_localizations.dart';
 import '../models/post.dart';
+import '../screens/creator_profile_page.dart';
 import '../screens/post_detail_page.dart';
 import '../services/posts_service.dart';
 
@@ -62,7 +64,14 @@ class _PostCardState extends State<PostCard> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Creator row
-            if (post.creator != null) _CreatorRow(creator: post.creator!),
+            if (post.creator != null)
+              _CreatorRow(
+                creator: post.creator!,
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) =>
+                      CreatorProfilePage(username: post.creator!.username),
+                )),
+              ),
 
             // Title + badges
             const SizedBox(height: 8),
@@ -92,7 +101,7 @@ class _PostCardState extends State<PostCard> {
                             size: 11, color: colorScheme.primary),
                         const SizedBox(width: 3),
                         Text(
-                          'Paid',
+                          L10n.t('paid'),
                           style: textTheme.labelSmall
                               ?.copyWith(color: colorScheme.primary),
                         ),
@@ -119,7 +128,7 @@ class _PostCardState extends State<PostCard> {
                         size: 15, color: colorScheme.outline),
                     const SizedBox(width: 8),
                     Text(
-                      'Subscribe to read this post',
+                      L10n.t('subscribe_to_read'),
                       style: textTheme.bodySmall
                           ?.copyWith(color: colorScheme.outline),
                     ),
@@ -253,13 +262,16 @@ class _PostCardState extends State<PostCard> {
 }
 
 class _CreatorRow extends StatelessWidget {
-  const _CreatorRow({required this.creator});
+  const _CreatorRow({required this.creator, this.onTap});
   final PostCreator creator;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Row(
+    return GestureDetector(
+      onTap: onTap,
+      child: Row(
       children: [
         CircleAvatar(
           radius: 14,
@@ -286,6 +298,7 @@ class _CreatorRow extends StatelessWidget {
               ?.copyWith(fontWeight: FontWeight.w600),
         ),
       ],
+    ),
     );
   }
 }

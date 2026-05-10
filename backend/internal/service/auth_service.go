@@ -149,6 +149,21 @@ func (s *AuthService) VerifyEmail(ctx context.Context, token string) error {
 	return s.userRepo.SetEmailVerified(ctx, userID)
 }
 
+func (s *AuthService) ChangePassword(ctx context.Context, userID uuid.UUID, currentPassword, newPassword string) error {
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(currentPassword)); err != nil {
+		return ErrInvalidCredentials
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	return s.userRepo.SetPassword(ctx, userID, string(hash))
+}
+
 func (s *AuthService) ForgotPassword(ctx context.Context, emailAddr string) error {
 	user, err := s.userRepo.GetByEmail(ctx, emailAddr)
 	if err != nil {

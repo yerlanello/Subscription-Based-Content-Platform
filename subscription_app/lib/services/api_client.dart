@@ -2,9 +2,10 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'auth_service.dart';
+import '../config/app_config.dart';
 
 class ApiClient {
-  static const _base = 'http://localhost:8080/api';
+  static const _base = AppConfig.baseUrl;
 
   // Prevent concurrent refresh calls.
   static bool _refreshing = false;
@@ -45,8 +46,13 @@ class ApiClient {
   }
 
   static Map<String, dynamic> _parse(http.Response res) {
+    final isSuccess = res.statusCode >= 200 && res.statusCode < 300;
+    if (res.body.isEmpty) {
+      if (isSuccess) return {};
+      throw 'Request failed (${res.statusCode})';
+    }
     final body = jsonDecode(res.body) as Map<String, dynamic>;
-    if (res.statusCode >= 200 && res.statusCode < 300) return body;
+    if (isSuccess) return body;
     throw body['error'] as String? ?? 'Request failed (${res.statusCode})';
   }
 

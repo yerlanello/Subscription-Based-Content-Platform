@@ -29,12 +29,12 @@ class MyApp extends StatelessWidget {
           title: 'Xabarla',
           themeMode: AppSettingsService.themeMode.value,
           theme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+            colorScheme: ColorScheme.fromSeed(seedColor: Color(0xFFEC4899)),
             useMaterial3: true,
           ),
           darkTheme: ThemeData(
             colorScheme: ColorScheme.fromSeed(
-              seedColor: Colors.blue,
+              seedColor: Color(0xFFEC4899),
               brightness: Brightness.dark,
             ),
             useMaterial3: true,

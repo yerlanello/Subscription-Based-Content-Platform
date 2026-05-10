@@ -117,7 +117,7 @@ class _HomePageState extends State<HomePage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Support your favourite creators',
+                  L10n.t('support_creators'),
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: colorScheme.onPrimaryContainer,
@@ -125,7 +125,7 @@ class _HomePageState extends State<HomePage> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Subscribe and get exclusive content',
+                  L10n.t('exclusive_content'),
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: colorScheme.onPrimaryContainer.withAlpha(180),
                       ),
@@ -134,7 +134,7 @@ class _HomePageState extends State<HomePage> {
                 TextField(
                   onChanged: (v) => setState(() => _query = v),
                   decoration: InputDecoration(
-                    hintText: 'Search creators...',
+                    hintText: L10n.t('search_creators'),
                     prefixIcon: const Icon(Icons.search),
                     filled: true,
                     fillColor: colorScheme.surface,
@@ -196,7 +196,7 @@ class _HomePageState extends State<HomePage> {
     if (filtered.isEmpty) {
       return Center(
         child: Text(
-          _creators.isEmpty ? 'No creators yet.' : 'No creators match your search.',
+          _creators.isEmpty ? L10n.t('no_creators_yet') : L10n.t('no_match_search'),
           style: TextStyle(color: colorScheme.outline),
         ),
       );

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import '../l10n/app_localizations.dart';
 import '../models/comment.dart';
 import '../models/post.dart';
+import '../screens/creator_profile_page.dart';
 import '../services/auth_service.dart';
 import '../services/posts_service.dart';
 
@@ -127,9 +129,15 @@ class _PostDetailPageState extends State<PostDetailPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          post.creator != null ? '@${post.creator!.username}' : 'Post',
-        ),
+        title: post.creator != null
+            ? GestureDetector(
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) =>
+                      CreatorProfilePage(username: post.creator!.username),
+                )),
+                child: Text('@${post.creator!.username}'),
+              )
+            : const Text('Post'),
       ),
       body: Column(
         children: [
@@ -149,26 +157,38 @@ class _PostDetailPageState extends State<PostDetailPage> {
                 Row(
                   children: [
                     if (post.creator != null) ...[
-                      CircleAvatar(
-                        radius: 12,
-                        backgroundColor: colorScheme.primary,
-                        backgroundImage: post.creator!.avatarUrl != null
-                            ? NetworkImage(post.creator!.avatarUrl!)
-                            : null,
-                        child: post.creator!.avatarUrl == null
-                            ? Text(
-                                post.creator!.username[0].toUpperCase(),
-                                style: TextStyle(
-                                    fontSize: 10,
-                                    color: colorScheme.onPrimary),
-                              )
-                            : null,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        '@${post.creator!.username}',
-                        style: textTheme.bodySmall
-                            ?.copyWith(fontWeight: FontWeight.w600),
+                      GestureDetector(
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => CreatorProfilePage(
+                                username: post.creator!.username),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 12,
+                              backgroundColor: colorScheme.primary,
+                              backgroundImage: post.creator!.avatarUrl != null
+                                  ? NetworkImage(post.creator!.avatarUrl!)
+                                  : null,
+                              child: post.creator!.avatarUrl == null
+                                  ? Text(
+                                      post.creator!.username[0].toUpperCase(),
+                                      style: TextStyle(
+                                          fontSize: 10,
+                                          color: colorScheme.onPrimary),
+                                    )
+                                  : null,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              '@${post.creator!.username}',
+                              style: textTheme.bodySmall
+                                  ?.copyWith(fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
                       ),
                       const SizedBox(width: 12),
                     ],
@@ -187,7 +207,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          'Paid',
+                          L10n.t('paid'),
                           style: textTheme.labelSmall
                               ?.copyWith(color: colorScheme.primary),
                         ),
@@ -211,7 +231,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
                             size: 36, color: colorScheme.outline),
                         const SizedBox(height: 8),
                         Text(
-                          'Subscribe to read this post',
+                          L10n.t('subscribe_to_read'),
                           style: textTheme.bodyMedium
                               ?.copyWith(color: colorScheme.outline),
                         ),
@@ -261,7 +281,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
                 const Divider(height: 32),
 
                 // Comments section
-                Text('Comments',
+                Text(L10n.t('comments'),
                     style: textTheme.titleMedium
                         ?.copyWith(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 12),
@@ -284,7 +304,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     child: Text(
-                      'No comments yet. Be the first!',
+                      L10n.t('no_comments'),
                       style:
                           textTheme.bodyMedium?.copyWith(color: colorScheme.outline),
                     ),
@@ -334,7 +354,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
 
 class _AttachmentsSection extends StatelessWidget {
   const _AttachmentsSection({required this.attachments});
-  final List<dynamic> attachments;
+  final List<PostAttachment> attachments;
 
   @override
   Widget build(BuildContext context) {
@@ -342,14 +362,14 @@ class _AttachmentsSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: attachments.map((a) {
-        final mime = (a.mimeType ?? '') as String;
+        final mime = a.mimeType ?? '';
         if (mime.startsWith('image/')) {
           return Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(8),
               child: Image.network(
-                a.url as String,
+                a.url,
                 fit: BoxFit.cover,
                 errorBuilder: (context, error, _) => Container(
                   height: 120,
@@ -360,7 +380,6 @@ class _AttachmentsSection extends StatelessWidget {
             ),
           );
         }
-        // Video / audio — show a labelled chip linking to the file.
         final isVideo = mime.startsWith('video/');
         return Padding(
           padding: const EdgeInsets.only(bottom: 8),
@@ -379,7 +398,7 @@ class _AttachmentsSection extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  isVideo ? 'Video attachment' : 'Audio attachment',
+                  isVideo ? 'Video' : 'Audio',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],
@@ -460,20 +479,28 @@ class _CommentTileState extends State<_CommentTile> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              CircleAvatar(
-                radius: 14,
-                backgroundColor: colorScheme.secondaryContainer,
-                backgroundImage: c.author?.avatarUrl != null
-                    ? NetworkImage(c.author!.avatarUrl!)
+              GestureDetector(
+                onTap: c.author != null
+                    ? () => Navigator.of(context).push(MaterialPageRoute(
+                          builder: (_) => CreatorProfilePage(
+                              username: c.author!.username),
+                        ))
                     : null,
-                child: c.author?.avatarUrl == null
-                    ? Text(
-                        (c.author?.username[0] ?? '?').toUpperCase(),
-                        style: TextStyle(
-                            fontSize: 11,
-                            color: colorScheme.onSecondaryContainer),
-                      )
-                    : null,
+                child: CircleAvatar(
+                  radius: 14,
+                  backgroundColor: colorScheme.secondaryContainer,
+                  backgroundImage: c.author?.avatarUrl != null
+                      ? NetworkImage(c.author!.avatarUrl!)
+                      : null,
+                  child: c.author?.avatarUrl == null
+                      ? Text(
+                          (c.author?.username[0] ?? '?').toUpperCase(),
+                          style: TextStyle(
+                              fontSize: 11,
+                              color: colorScheme.onSecondaryContainer),
+                        )
+                      : null,
+                ),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -523,7 +550,7 @@ class _CommentTileState extends State<_CommentTile> {
                         const SizedBox(width: 12),
                         GestureDetector(
                           onTap: () => widget.onReply(c),
-                          child: Text('Reply',
+                          child: Text(L10n.t('reply'),
                               style: textTheme.bodySmall?.copyWith(
                                   color: colorScheme.primary,
                                   fontWeight: FontWeight.w500)),
@@ -532,7 +559,7 @@ class _CommentTileState extends State<_CommentTile> {
                           const SizedBox(width: 12),
                           GestureDetector(
                             onTap: () => widget.onDelete(c),
-                            child: Text('Delete',
+                            child: Text(L10n.t('delete'),
                                 style: textTheme.bodySmall?.copyWith(
                                     color: colorScheme.error)),
                           ),
@@ -620,7 +647,7 @@ class _CommentInput extends StatelessWidget {
               child: Row(
                 children: [
                   Text(
-                    'Replying to @${replyingTo!.author?.username ?? 'unknown'}',
+                    '${L10n.t('replying_to')} @${replyingTo!.author?.username ?? 'unknown'}',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: colorScheme.primary),
                   ),
@@ -638,8 +665,8 @@ class _CommentInput extends StatelessWidget {
               Expanded(
                 child: TextField(
                   controller: controller,
-                  decoration: const InputDecoration(
-                    hintText: 'Write a comment…',
+                  decoration: InputDecoration(
+                    hintText: L10n.t('write_comment'),
                     border: InputBorder.none,
                     isDense: true,
                   ),

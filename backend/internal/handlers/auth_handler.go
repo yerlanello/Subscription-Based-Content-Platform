@@ -157,6 +157,35 @@ func (h *AuthHandler) ResendVerification(w http.ResponseWriter, r *http.Request)
 	response.OK(w, map[string]string{"message": "verification email sent"})
 }
 
+func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r)
+	var input struct {
+		CurrentPassword string `json:"current_password"`
+		NewPassword     string `json:"new_password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if input.CurrentPassword == "" || input.NewPassword == "" {
+		response.Error(w, http.StatusBadRequest, "current_password and new_password are required")
+		return
+	}
+	if len(input.NewPassword) < 8 {
+		response.Error(w, http.StatusBadRequest, "password must be at least 8 characters")
+		return
+	}
+	if err := h.authSvc.ChangePassword(r.Context(), claims.UserID, input.CurrentPassword, input.NewPassword); err != nil {
+		if errors.Is(err, service.ErrInvalidCredentials) {
+			response.Error(w, http.StatusUnauthorized, "current password is incorrect")
+			return
+		}
+		response.Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	response.OK(w, map[string]string{"message": "password changed"})
+}
+
 func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Email string `json:"email"`

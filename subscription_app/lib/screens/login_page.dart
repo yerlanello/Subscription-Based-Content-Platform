@@ -16,7 +16,16 @@ class _LoginPageState extends State<LoginPage> {
 
   bool _isLogin = true;
   bool _isSubmitting = false;
+  bool _obscurePassword = true;
   String? _errorMessage;
+
+  // RFC 5322-inspired pattern: local@domain.tld
+  static final _emailRegex = RegExp(
+    r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$',
+  );
+
+  // 3–30 chars, letters/digits/underscores only
+  static final _usernameRegex = RegExp(r'^[a-zA-Z0-9_]{3,30}$');
 
   Future<void> _submit({required bool isLogin}) async {
     if (!_formKey.currentState!.validate()) return;
@@ -46,49 +55,54 @@ class _LoginPageState extends State<LoginPage> {
         data['refresh_token'] as String,
       );
       final user = data['user'] as Map<String, dynamic>;
+      final emailVerified = user['email_verified'] as bool? ?? false;
       await AuthService.saveUser(
         user['username'] as String,
         user['email'] as String,
+        emailVerified: emailVerified,
       );
       await AuthService.saveRole(user['role'] as String? ?? 'patron');
 
       if (!mounted) return;
+
+      if (!isLogin && !emailVerified) {
+        await _showVerificationDialog(user['email'] as String);
+        if (!mounted) return;
+      }
+
       Navigator.pushReplacementNamed(context, '/home');
     } catch (e) {
-      setState(() {
-        _errorMessage = e.toString();
-      });
+      if (mounted) setState(() => _errorMessage = e.toString());
     } finally {
-      if (mounted) {
-        setState(() => _isSubmitting = false);
-      }
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
+  Future<void> _showVerificationDialog(String email) {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => _VerificationDialog(email: email),
+    );
+  }
+
   String? _validateUsername(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return 'Username is required';
+    if (value == null || value.trim().isEmpty) return 'Username is required';
+    if (!_usernameRegex.hasMatch(value.trim())) {
+      return 'Username must be 3–30 characters: letters, digits or underscores';
     }
     return null;
   }
 
   String? _validateEmail(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return 'Email is required';
-    }
-    if (!value.contains('@') || !value.contains('.')) {
-      return 'Enter a valid email';
-    }
+    if (value == null || value.trim().isEmpty) return 'Email is required';
+    if (!_emailRegex.hasMatch(value.trim())) return 'Enter a valid email address';
     return null;
   }
 
   String? _validatePassword(String? value) {
-    if (value == null || value.isEmpty) {
-      return 'Password is required';
-    }
-    if (value.length < 8) {
-      return 'At least 8 characters';
-    }
+    if (value == null || value.isEmpty) return 'Password is required';
+    if (_isLogin) return null;
     return null;
   }
 
@@ -122,6 +136,7 @@ class _LoginPageState extends State<LoginPage> {
                   Text(
                     _errorMessage!,
                     style: const TextStyle(color: Colors.red),
+                    textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
                 ],
@@ -132,7 +147,9 @@ class _LoginPageState extends State<LoginPage> {
                     decoration: const InputDecoration(
                       labelText: 'Username',
                       border: OutlineInputBorder(),
+                      helperText: '3–30 characters, letters/digits/underscores',
                     ),
+                    textInputAction: TextInputAction.next,
                     validator: _validateUsername,
                   ),
                   const SizedBox(height: 12),
@@ -145,16 +162,31 @@ class _LoginPageState extends State<LoginPage> {
                     border: OutlineInputBorder(),
                   ),
                   keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.next,
                   validator: _validateEmail,
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _passwordController,
-                  obscureText: true,
-                  decoration: const InputDecoration(
+                  obscureText: _obscurePassword,
+                  decoration: InputDecoration(
                     labelText: 'Password',
-                    border: OutlineInputBorder(),
+                    border: const OutlineInputBorder(),
+                    helperText: _isLogin
+                        ? null
+                        : 'Min 8 chars, upper & lower case, number, special character',
+                    helperMaxLines: 2,
+                    suffixIcon: IconButton(
+                      icon: Icon(_obscurePassword
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined),
+                      onPressed: () =>
+                          setState(() => _obscurePassword = !_obscurePassword),
+                    ),
                   ),
+                  textInputAction: TextInputAction.done,
+                  onFieldSubmitted: (_) =>
+                      _isSubmitting ? null : _submit(isLogin: _isLogin),
                   validator: _validatePassword,
                 ),
                 const SizedBox(height: 24),
@@ -162,9 +194,8 @@ class _LoginPageState extends State<LoginPage> {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: _isSubmitting
-                        ? null
-                        : () => _submit(isLogin: _isLogin),
+                    onPressed:
+                        _isSubmitting ? null : () => _submit(isLogin: _isLogin),
                     child: _isSubmitting
                         ? const SizedBox(
                             height: 16,
@@ -191,6 +222,105 @@ class _LoginPageState extends State<LoginPage> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _VerificationDialog extends StatefulWidget {
+  final String email;
+  const _VerificationDialog({required this.email});
+
+  @override
+  State<_VerificationDialog> createState() => _VerificationDialogState();
+}
+
+class _VerificationDialogState extends State<_VerificationDialog> {
+  bool _resending = false;
+  String? _resendMessage;
+  bool _resendError = false;
+
+  Future<void> _resend() async {
+    setState(() {
+      _resending = true;
+      _resendMessage = null;
+    });
+    try {
+      await AuthService.resendVerification();
+      if (mounted) {
+        setState(() {
+          _resendMessage = 'Email resent — check your inbox.';
+          _resendError = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _resendMessage = e.toString();
+          _resendError = true;
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _resending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AlertDialog(
+      icon: Icon(
+        Icons.mark_email_unread_outlined,
+        size: 40,
+        color: theme.colorScheme.primary,
+      ),
+      title: const Text('Verify your email'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('We sent a verification link to:'),
+          const SizedBox(height: 4),
+          Text(
+            widget.email,
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Some features — like creating posts and subscribing — require a verified account. You can continue now and verify later.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          if (_resendMessage != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              _resendMessage!,
+              style: TextStyle(
+                fontSize: 13,
+                color: _resendError
+                    ? theme.colorScheme.error
+                    : Colors.green.shade700,
+              ),
+            ),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: _resending ? null : _resend,
+          child: _resending
+              ? const SizedBox(
+                  height: 14,
+                  width: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Resend email'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Continue'),
+        ),
+      ],
     );
   }
 }

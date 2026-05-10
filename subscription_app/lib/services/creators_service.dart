@@ -12,7 +12,7 @@ class CreatorsService {
     final query = StringBuffer('/creators?limit=$limit&offset=$offset');
     if (category != null) query.write('&category=$category');
     final res = await ApiClient.get(query.toString());
-    final list = res['data'] as List<dynamic>;
+    final list = (res['data'] as List<dynamic>?) ?? [];
     return list
         .map((e) => CreatorWithProfile.fromJson(e as Map<String, dynamic>))
         .toList();
@@ -58,7 +58,7 @@ class CreatorsService {
   }) async {
     final res = await ApiClient.get(
         '/creators/$username/posts?limit=$limit&offset=$offset');
-    final list = res['data'] as List<dynamic>;
+    final list = (res['data'] as List<dynamic>?) ?? [];
     return list.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
   }
 }
