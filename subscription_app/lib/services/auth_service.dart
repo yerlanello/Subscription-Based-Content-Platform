@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/app_config.dart';
@@ -20,7 +21,10 @@ class UserStats {
 }
 
 class AuthService {
-  static const _base = AppConfig.baseUrl;
+  static final _base = AppConfig.baseUrl;
+
+  /// Fires whenever the stored role changes (e.g. patron → creator).
+  static final roleNotifier = ValueNotifier<String?>('patron');
 
   static const _keyAccess = 'access_token';
   static const _keyRefresh = 'refresh_token';
@@ -150,10 +154,11 @@ class AuthService {
     return prefs.getString(_keyEmail);
   }
 
-  /// Persist the user's role to local storage.
+  /// Persist the user's role to local storage and notify listeners.
   static Future<void> saveRole(String role) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyRole, role);
+    roleNotifier.value = role;
   }
 
   /// Retrieve the stored role, or null if not logged in.

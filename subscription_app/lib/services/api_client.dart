@@ -5,7 +5,7 @@ import 'auth_service.dart';
 import '../config/app_config.dart';
 
 class ApiClient {
-  static const _base = AppConfig.baseUrl;
+  static final _base = AppConfig.baseUrl;
 
   // Prevent concurrent refresh calls.
   static bool _refreshing = false;

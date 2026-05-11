@@ -27,15 +27,33 @@ class _MainShellState extends State<MainShell> {
     super.initState();
     _loadRole();
     AppSettingsService.locale.addListener(_onLocaleChange);
+    AuthService.roleNotifier.addListener(_onRoleChange);
   }
 
   @override
   void dispose() {
     AppSettingsService.locale.removeListener(_onLocaleChange);
+    AuthService.roleNotifier.removeListener(_onRoleChange);
     super.dispose();
   }
 
   void _onLocaleChange() => setState(() {});
+
+  void _onRoleChange() {
+    final roleStr = AuthService.roleNotifier.value;
+    if (roleStr != null && mounted) {
+      setState(() {
+        switch (roleStr) {
+          case 'creator':
+            _role = UserRole.creator;
+          case 'both':
+            _role = UserRole.both;
+          default:
+            _role = UserRole.patron;
+        }
+      });
+    }
+  }
 
   Future<void> _loadRole() async {
     final roleStr = await AuthService.getRole();

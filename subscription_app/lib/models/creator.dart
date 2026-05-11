@@ -60,12 +60,16 @@ class CreatorPage {
   final CreatorProfile profile;
   final bool isSubscribed;
   final bool isFollowing;
+  final int subscriberCount;
+  final int followerCount;
 
   const CreatorPage({
     required this.user,
     required this.profile,
     required this.isSubscribed,
     required this.isFollowing,
+    this.subscriberCount = 0,
+    this.followerCount = 0,
   });
 
   factory CreatorPage.fromJson(Map<String, dynamic> json) => CreatorPage(
@@ -73,5 +77,7 @@ class CreatorPage {
         profile: CreatorProfile.fromJson(json['profile'] as Map<String, dynamic>),
         isSubscribed: json['is_subscribed'] as bool? ?? false,
         isFollowing: json['is_following'] as bool? ?? false,
+        subscriberCount: json['subscriber_count'] as int? ?? 0,
+        followerCount: json['follower_count'] as int? ?? 0,
       );
 }

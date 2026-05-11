@@ -50,6 +50,18 @@ class CreatorsService {
     await ApiClient.delete('/creators/$username/follow');
   }
 
+  /// Fetch creators the current user is subscribed to.
+  static Future<List<CreatorWithProfile>> getMySubscriptions() async {
+    final res = await ApiClient.get('/users/me/subscriptions');
+    final raw = res['data'];
+    if (raw == null || raw is! List<dynamic>) return [];
+    return raw
+        .whereType<Map<String, dynamic>>()
+        .where((e) => e['user'] != null && e['profile'] != null)
+        .map((e) => CreatorWithProfile.fromJson(e))
+        .toList();
+  }
+
   /// Fetch posts published by a specific creator.
   static Future<List<Post>> getPosts(
     String username, {

@@ -56,7 +56,11 @@ class _PostCardState extends State<PostCard> {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () => Navigator.of(context).push(MaterialPageRoute(
-          builder: (_) => PostDetailPage(post: post),
+          builder: (_) => PostDetailPage(
+            post: post,
+            initialIsLiked: _liked,
+            initialLikesCount: _likesCount,
+          ),
         )),
         child: Padding(
         padding: const EdgeInsets.all(14),

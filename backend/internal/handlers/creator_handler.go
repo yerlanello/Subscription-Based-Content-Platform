@@ -225,15 +225,18 @@ func (h *CreatorHandler) Unfollow(w http.ResponseWriter, r *http.Request) {
 	response.NoContent(w)
 }
 
-// MySubscriptions
+// MySubscriptions returns the creators the current user is subscribed to.
 func (h *CreatorHandler) MySubscriptions(w http.ResponseWriter, r *http.Request) {
 	claims := middleware.GetClaims(r)
-	subs, err := h.subRepo.GetByPatron(r.Context(), claims.UserID)
+	creators, err := h.subRepo.GetSubscribedCreators(r.Context(), claims.UserID)
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	response.OK(w, subs)
+	if creators == nil {
+		creators = []models.CreatorWithProfile{}
+	}
+	response.OK(w, creators)
 }
 
 // MyFollowing — авторы, на которых подписан пользователь (follow)

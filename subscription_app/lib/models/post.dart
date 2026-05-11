@@ -59,6 +59,7 @@ class Post {
   final int likesCount;
   final int commentsCount;
   final bool isLiked;
+  final bool isPinned;
   final PostCreator? creator;
 
   const Post({
@@ -75,6 +76,7 @@ class Post {
     required this.likesCount,
     required this.commentsCount,
     required this.isLiked,
+    this.isPinned = false,
     this.creator,
   });
 
@@ -98,6 +100,7 @@ class Post {
         likesCount: json['likes_count'] as int? ?? 0,
         commentsCount: json['comments_count'] as int? ?? 0,
         isLiked: json['is_liked'] as bool? ?? false,
+        isPinned: json['is_pinned'] as bool? ?? false,
         creator: json['creator'] != null
             ? PostCreator.fromJson(json['creator'] as Map<String, dynamic>)
             : null,

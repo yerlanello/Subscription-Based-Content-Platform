@@ -7,8 +7,10 @@ import '../services/auth_service.dart';
 import '../services/posts_service.dart';
 
 class PostDetailPage extends StatefulWidget {
-  const PostDetailPage({super.key, required this.post});
+  const PostDetailPage({super.key, required this.post, this.initialIsLiked, this.initialLikesCount});
   final Post post;
+  final bool? initialIsLiked;
+  final int? initialLikesCount;
 
   @override
   State<PostDetailPage> createState() => _PostDetailPageState();
@@ -32,8 +34,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
   @override
   void initState() {
     super.initState();
-    _liked = widget.post.isLiked;
-    _likesCount = widget.post.likesCount;
+    _liked = widget.initialIsLiked ?? widget.post.isLiked;
+    _likesCount = widget.initialLikesCount ?? widget.post.likesCount;
     _loadComments();
     _loadUsername();
   }

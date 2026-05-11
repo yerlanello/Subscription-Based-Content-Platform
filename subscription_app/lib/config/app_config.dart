@@ -1,10 +1,13 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
+
 class AppConfig {
-  // Production default is HTTPS. For local dev, override at build time:
-  //   flutter run --dart-define=BASE_URL=http://localhost:8080/api
-  static const baseUrl = String.fromEnvironment(
-    'BASE_URL',
-    defaultValue: 'https://api.xabarla.com/api',
-  );
+  static String get baseUrl {
+    const override = String.fromEnvironment('BASE_URL');
+    if (override.isNotEmpty) return override;
+    if (!kIsWeb && Platform.isAndroid) return 'http://10.0.2.2:8080/api';
+    return 'http://localhost:8080/api';
+  }
 
   // Returns an absolute URL. If [url] is already absolute, returns it unchanged.
   // Relative URLs (starting with /) are prefixed with the server origin derived

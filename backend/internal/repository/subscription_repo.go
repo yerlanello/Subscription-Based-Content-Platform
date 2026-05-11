@@ -118,6 +118,39 @@ func (r *SubscriptionRepo) GetByPatron(ctx context.Context, patronID uuid.UUID) 
 	return subs, nil
 }
 
+func (r *SubscriptionRepo) GetSubscribedCreators(ctx context.Context, patronID uuid.UUID) ([]models.CreatorWithProfile, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT u.id, u.username, u.email, u.role, u.avatar_url, u.bio, u.created_at, u.updated_at,
+		       cp.id, cp.user_id, cp.display_name, cp.description, cp.cover_url, cp.category,
+		       cp.subscription_price_cents, cp.subscription_description, cp.created_at, cp.updated_at
+		FROM subscriptions s
+		JOIN users u ON u.id = s.creator_id
+		JOIN creator_profiles cp ON cp.user_id = s.creator_id
+		WHERE s.patron_id = $1 AND s.status = 'active'
+		ORDER BY s.started_at DESC
+	`, patronID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []models.CreatorWithProfile
+	for rows.Next() {
+		var c models.CreatorWithProfile
+		if err := rows.Scan(
+			&c.User.ID, &c.User.Username, &c.User.Email, &c.User.Role,
+			&c.User.AvatarURL, &c.User.Bio, &c.User.CreatedAt, &c.User.UpdatedAt,
+			&c.Profile.ID, &c.Profile.UserID, &c.Profile.DisplayName, &c.Profile.Description,
+			&c.Profile.CoverURL, &c.Profile.Category, &c.Profile.SubscriptionPriceCents,
+			&c.Profile.SubscriptionDescription, &c.Profile.CreatedAt, &c.Profile.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		result = append(result, c)
+	}
+	return result, nil
+}
+
 // Follow / Unfollow
 
 type FollowRepo struct {

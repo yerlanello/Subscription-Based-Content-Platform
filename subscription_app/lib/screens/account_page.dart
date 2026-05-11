@@ -8,6 +8,7 @@ import '../services/auth_service.dart';
 import '../widgets/become_creator_dialog.dart';
 import 'edit_profile_page.dart';
 import 'new_post_page.dart';
+import 'my_subscriptions_page.dart';
 import 'notifications_page.dart';
 
 class AccountPage extends StatefulWidget {
@@ -21,6 +22,7 @@ class _AccountPageState extends State<AccountPage> {
   String? _username;
   String? _email;
   String? _avatarUrl;
+  String? _bio;
   UserRole _role = UserRole.patron;
   int _subscriptionsCount = 0;
   int _followingCount = 0;
@@ -58,6 +60,7 @@ class _AccountPageState extends State<AccountPage> {
           _subscriptionsCount = stats.subscriptionsCount;
           _followingCount = stats.followingCount;
           _avatarUrl = stats.avatarUrl;
+          _bio = stats.bio;
         });
       }
     } catch (_) {
@@ -168,6 +171,19 @@ class _AccountPageState extends State<AccountPage> {
                                 color: colorScheme.onPrimaryContainer.withAlpha(180),
                               ),
                         ),
+                        if (_bio != null && _bio!.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: Text(
+                              _bio!,
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: colorScheme.onPrimaryContainer.withAlpha(200),
+                                  ),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -299,7 +315,9 @@ class _AccountPageState extends State<AccountPage> {
                       leading: const Icon(Icons.subscriptions_outlined),
                       title: Text(L10n.t('my_subscriptions')),
                       trailing: const Icon(Icons.chevron_right),
-                      onTap: () {},
+                      onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const MySubscriptionsPage()),
+                    ),
                     ),
                   ),
 

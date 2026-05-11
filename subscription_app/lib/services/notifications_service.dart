@@ -4,7 +4,8 @@ import 'api_client.dart';
 class NotificationsService {
   static Future<List<AppNotification>> list() async {
     final res = await ApiClient.get('/notifications');
-    final data = res['data'] as List<dynamic>? ?? [];
+    final payload = res['data'] as Map<String, dynamic>? ?? {};
+    final data = payload['notifications'] as List<dynamic>? ?? [];
     return data
         .map((e) => AppNotification.fromJson(e as Map<String, dynamic>))
         .toList();
