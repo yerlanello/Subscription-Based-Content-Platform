@@ -302,6 +302,145 @@ func (h *StripeHandler) VerifyDonation(w http.ResponseWriter, r *http.Request) {
 	response.OK(w, map[string]string{"status": "ok"})
 }
 
+// CreateSubscriptionIntent — POST /api/creators/{username}/checkout-intent
+// Mobile: creates a Checkout Session with a deep-link success URL.
+func (h *StripeHandler) CreateSubscriptionIntent(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r)
+	if claims == nil {
+		response.Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	username := chi.URLParam(r, "username")
+
+	creatorUser, err := h.userRepo.GetByUsername(r.Context(), username)
+	if err != nil {
+		response.Error(w, http.StatusNotFound, "creator not found")
+		return
+	}
+
+	profile, err := h.creatorRepo.GetByUserID(r.Context(), creatorUser.ID)
+	if err != nil {
+		response.Error(w, http.StatusNotFound, "creator profile not found")
+		return
+	}
+
+	if profile.SubscriptionPriceCents > 9_999_999 {
+		response.Error(w, http.StatusBadRequest, "subscription price exceeds maximum allowed (9 999 999 ₸)")
+		return
+	}
+	amountTiyn := int64(profile.SubscriptionPriceCents) * 100
+
+	params := &stripe.CheckoutSessionParams{
+		Mode: stripe.String(string(stripe.CheckoutSessionModePayment)),
+		LineItems: []*stripe.CheckoutSessionLineItemParams{
+			{
+				PriceData: &stripe.CheckoutSessionLineItemPriceDataParams{
+					Currency:   stripe.String("kzt"),
+					UnitAmount: stripe.Int64(amountTiyn),
+					ProductData: &stripe.CheckoutSessionLineItemPriceDataProductDataParams{
+						Name: stripe.String("Подписка на " + profile.DisplayName),
+					},
+				},
+				Quantity: stripe.Int64(1),
+			},
+		},
+		SuccessURL: stripe.String("xabarlaapp://payment?type=subscription&session_id={CHECKOUT_SESSION_ID}"),
+		CancelURL:  stripe.String("xabarlaapp://payment?type=cancelled"),
+		Metadata: map[string]string{
+			"patron_id":  claims.UserID.String(),
+			"creator_id": creatorUser.ID.String(),
+		},
+	}
+
+	sess, err := session.New(params)
+	if err != nil {
+		log.Printf("stripe checkout-intent error: %v", err)
+		response.Error(w, http.StatusInternalServerError, "failed to create checkout session")
+		return
+	}
+
+	response.OK(w, map[string]string{"url": sess.URL})
+}
+
+// CreateDonationIntent — POST /api/creators/{username}/donate-intent
+// Mobile: creates a donation Checkout Session with a deep-link success URL.
+func (h *StripeHandler) CreateDonationIntent(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r)
+	if claims == nil {
+		response.Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	username := chi.URLParam(r, "username")
+
+	var body struct {
+		AmountCents int    `json:"amount_cents"`
+		Message     string `json:"message"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.AmountCents <= 0 {
+		response.Error(w, http.StatusBadRequest, "amount_cents is required and must be positive")
+		return
+	}
+
+	creatorUser, err := h.userRepo.GetByUsername(r.Context(), username)
+	if err != nil {
+		response.Error(w, http.StatusNotFound, "creator not found")
+		return
+	}
+
+	if creatorUser.ID == claims.UserID {
+		response.Error(w, http.StatusBadRequest, "cannot donate to yourself")
+		return
+	}
+
+	profile, err := h.creatorRepo.GetByUserID(r.Context(), creatorUser.ID)
+	if err != nil {
+		response.Error(w, http.StatusNotFound, "creator profile not found")
+		return
+	}
+
+	if body.AmountCents > 9_999_999 {
+		response.Error(w, http.StatusBadRequest, "donation amount exceeds maximum allowed (9 999 999 ₸)")
+		return
+	}
+	amountTiyn := int64(body.AmountCents) * 100
+
+	params := &stripe.CheckoutSessionParams{
+		Mode: stripe.String(string(stripe.CheckoutSessionModePayment)),
+		LineItems: []*stripe.CheckoutSessionLineItemParams{
+			{
+				PriceData: &stripe.CheckoutSessionLineItemPriceDataParams{
+					Currency:   stripe.String("kzt"),
+					UnitAmount: stripe.Int64(amountTiyn),
+					ProductData: &stripe.CheckoutSessionLineItemPriceDataProductDataParams{
+						Name: stripe.String("Донат для " + profile.DisplayName),
+					},
+				},
+				Quantity: stripe.Int64(1),
+			},
+		},
+		SuccessURL: stripe.String("xabarlaapp://payment?type=donation&session_id={CHECKOUT_SESSION_ID}"),
+		CancelURL:  stripe.String("xabarlaapp://payment?type=cancelled"),
+		Metadata: map[string]string{
+			"type":       "donation",
+			"donor_id":   claims.UserID.String(),
+			"creator_id": creatorUser.ID.String(),
+			"amount":     strconv.Itoa(body.AmountCents),
+			"message":    body.Message,
+		},
+	}
+
+	sess, err := session.New(params)
+	if err != nil {
+		log.Printf("stripe donate-intent error: %v", err)
+		response.Error(w, http.StatusInternalServerError, "failed to create checkout session")
+		return
+	}
+
+	response.OK(w, map[string]string{"url": sess.URL})
+}
+
 // Webhook — POST /api/webhooks/stripe
 // Обрабатывает события от Stripe (checkout.session.completed → создаём подписку)
 func (h *StripeHandler) Webhook(w http.ResponseWriter, r *http.Request) {

@@ -42,9 +42,9 @@ class PostsService {
 
   static Future<Post> update(String id, {String? title, String? content, bool? isFree}) async {
     final res = await ApiClient.put('/posts/$id', body: {
-      if (title != null) 'title': title,
-      if (content != null) 'content': content,
-      if (isFree != null) 'is_free': isFree,
+      'title': ?title,
+      'content': ?content,
+      'is_free': ?isFree,
     });
     return Post.fromJson(res['data'] as Map<String, dynamic>);
   }
@@ -99,7 +99,7 @@ class PostsService {
   static Future<Comment> createComment(String postId, String content, {String? parentId}) async {
     final res = await ApiClient.post('/posts/$postId/comments', body: {
       'content': content,
-      if (parentId case final id?) 'parent_id': id,
+      'parent_id': ?parentId,
     });
     return Comment.fromJson(res['data'] as Map<String, dynamic>);
   }

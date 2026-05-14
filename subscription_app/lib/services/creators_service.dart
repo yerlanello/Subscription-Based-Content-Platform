@@ -35,6 +35,59 @@ class CreatorsService {
     await ApiClient.delete('/creators/$username/subscribe');
   }
 
+  /// Create a Stripe Checkout Session for a paid subscription. Returns the checkout URL (web).
+  static Future<String> checkout(String username) async {
+    final res = await ApiClient.post('/creators/$username/checkout');
+    final data = res['data'] as Map<String, dynamic>;
+    return data['url'] as String;
+  }
+
+  /// Create a Stripe Checkout Session for a donation. Returns the checkout URL (web).
+  static Future<String> donate(
+    String username,
+    int amountCents, {
+    String? message,
+  }) async {
+    final res = await ApiClient.post('/creators/$username/donate', body: {
+      'amount_cents': amountCents,
+      if (message != null && message.isNotEmpty) 'message': message,
+    });
+    final data = res['data'] as Map<String, dynamic>;
+    return data['url'] as String;
+  }
+
+  /// Mobile: creates a Checkout Session for a paid subscription. Returns the Stripe-hosted URL.
+  static Future<String> checkoutIntent(String username) async {
+    final res = await ApiClient.post('/creators/$username/checkout-intent');
+    final data = res['data'] as Map<String, dynamic>;
+    return data['url'] as String;
+  }
+
+  /// Mobile: creates a Checkout Session for a donation. Returns the Stripe-hosted URL.
+  static Future<String> donateIntent(
+    String username,
+    int amountCents, {
+    String? message,
+  }) async {
+    final res = await ApiClient.post('/creators/$username/donate-intent', body: {
+      'amount_cents': amountCents,
+      if (message != null && message.isNotEmpty) 'message': message,
+    });
+    final data = res['data'] as Map<String, dynamic>;
+    return data['url'] as String;
+  }
+
+  /// Verify a completed subscription Stripe session and activate the subscription.
+  static Future<void> verifySubscription(String sessionId) async {
+    await ApiClient.post('/subscriptions/verify-session',
+        body: {'session_id': sessionId});
+  }
+
+  /// Verify a completed donation Stripe session and record the donation.
+  static Future<void> verifyDonation(String sessionId) async {
+    await ApiClient.post('/donations/verify', body: {'session_id': sessionId});
+  }
+
   /// Upgrade the current patron account to a creator account.
   static Future<void> becomeCreator(String displayName) async {
     await ApiClient.post('/creators', body: {'display_name': displayName});

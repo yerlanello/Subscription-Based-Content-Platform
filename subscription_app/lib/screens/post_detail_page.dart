@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../config/app_config.dart';
 import '../l10n/app_localizations.dart';
 import '../models/comment.dart';
 import '../models/post.dart';
 import '../screens/creator_profile_page.dart';
 import '../services/auth_service.dart';
 import '../services/posts_service.dart';
+import '../widgets/video_player_widget.dart';
 
 class PostDetailPage extends StatefulWidget {
   const PostDetailPage({super.key, required this.post, this.initialIsLiked, this.initialLikesCount});
@@ -172,7 +175,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
                               radius: 12,
                               backgroundColor: colorScheme.primary,
                               backgroundImage: post.creator!.avatarUrl != null
-                                  ? NetworkImage(post.creator!.avatarUrl!)
+                                  ? NetworkImage(AppConfig.absoluteUrl(post.creator!.avatarUrl!))
                                   : null,
                               child: post.creator!.avatarUrl == null
                                   ? Text(
@@ -360,54 +363,144 @@ class _AttachmentsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: attachments.map((a) {
-        final mime = a.mimeType ?? '';
-        if (mime.startsWith('image/')) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Image.network(
-                a.url,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, _) => Container(
-                  height: 120,
-                  color: colorScheme.surfaceContainerHighest,
-                  child: const Center(child: Icon(Icons.broken_image_outlined)),
-                ),
+      children: attachments
+          .map((a) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: _AttachmentItem(attachment: a),
+              ))
+          .toList(),
+    );
+  }
+}
+
+class _AttachmentItem extends StatelessWidget {
+  const _AttachmentItem({required this.attachment});
+  final PostAttachment attachment;
+
+  @override
+  Widget build(BuildContext context) {
+    final mime = attachment.mimeType ?? '';
+    final colorScheme = Theme.of(context).colorScheme;
+
+    // Images
+    if (mime.startsWith('image/')) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.network(
+          AppConfig.absoluteUrl(attachment.url),
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => _FileTile(
+            icon: Icons.broken_image_outlined,
+            label: 'Image unavailable',
+            url: attachment.url,
+          ),
+        ),
+      );
+    }
+
+    // Videos — both uploaded files and external URLs
+    if (mime.startsWith('video/')) {
+      return VideoPlayerWidget(url: attachment.url);
+    }
+
+    // Audio
+    if (mime.startsWith('audio/')) {
+      return _FileTile(
+        icon: Icons.audiotrack_outlined,
+        label: _filename(attachment.url),
+        url: attachment.url,
+        color: colorScheme.primary,
+      );
+    }
+
+    // PDF
+    if (mime == 'application/pdf') {
+      return _FileTile(
+        icon: Icons.picture_as_pdf_outlined,
+        label: _filename(attachment.url),
+        url: attachment.url,
+        color: Colors.red,
+      );
+    }
+
+    // Plain text
+    if (mime == 'text/plain') {
+      return _FileTile(
+        icon: Icons.text_snippet_outlined,
+        label: _filename(attachment.url),
+        url: attachment.url,
+        color: colorScheme.secondary,
+      );
+    }
+
+    // Fallback
+    return _FileTile(
+      icon: Icons.attach_file,
+      label: _filename(attachment.url),
+      url: attachment.url,
+    );
+  }
+
+  String _filename(String url) {
+    final name = url.split('/').last.split('?').first;
+    return name.isEmpty ? 'File' : name;
+  }
+}
+
+class _FileTile extends StatelessWidget {
+  const _FileTile({
+    required this.icon,
+    required this.label,
+    required this.url,
+    this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final String url;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: () async {
+        final uri = Uri.tryParse(AppConfig.absoluteUrl(url));
+        if (uri != null && await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        } else {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Could not open file')),
+            );
+          }
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 22, color: color ?? colorScheme.outline),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                label,
+                style: Theme.of(context).textTheme.bodyMedium,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
-          );
-        }
-        final isVideo = mime.startsWith('video/');
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  isVideo ? Icons.videocam_outlined : Icons.audiotrack_outlined,
-                  size: 20,
-                  color: colorScheme.primary,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  isVideo ? 'Video' : 'Audio',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
-            ),
-          ),
-        );
-      }).toList(),
+            Icon(Icons.open_in_new, size: 16, color: colorScheme.outline),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -492,7 +585,7 @@ class _CommentTileState extends State<_CommentTile> {
                   radius: 14,
                   backgroundColor: colorScheme.secondaryContainer,
                   backgroundImage: c.author?.avatarUrl != null
-                      ? NetworkImage(c.author!.avatarUrl!)
+                      ? NetworkImage(AppConfig.absoluteUrl(c.author!.avatarUrl!))
                       : null,
                   child: c.author?.avatarUrl == null
                       ? Text(

@@ -36,10 +36,10 @@ func NewMinioStorage(endpoint, accessKey, secretKey, bucket, publicURL string) (
 		if err := client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{}); err != nil {
 			return nil, err
 		}
-		// делаем бакет публичным на чтение
-		policy := fmt.Sprintf(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetObject"],"Resource":["arn:aws:s3:::%s/*"]}]}`, bucket)
-		_ = client.SetBucketPolicy(ctx, bucket, policy)
 	}
+	// Always ensure public read so Flutter can stream media without auth headers.
+	policy := fmt.Sprintf(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetObject"],"Resource":["arn:aws:s3:::%s/*"]}]}`, bucket)
+	_ = client.SetBucketPolicy(ctx, bucket, policy)
 
 	return &MinioStorage{client: client, bucket: bucket, publicURL: publicURL}, nil
 }

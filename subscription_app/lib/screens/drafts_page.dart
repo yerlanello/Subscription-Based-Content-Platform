@@ -268,10 +268,10 @@ class _DraftsPageState extends State<DraftsPage> {
                             ?.copyWith(color: colorScheme.onSurfaceVariant),
                       ),
                     ],
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        if (!isDraft) ...[
+                    if (!isDraft) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
                           Icon(Icons.favorite_outline, size: 16, color: colorScheme.outline),
                           const SizedBox(width: 4),
                           Text('${post.likesCount}',
@@ -282,8 +282,12 @@ class _DraftsPageState extends State<DraftsPage> {
                           Text('${post.commentsCount}',
                               style: TextStyle(fontSize: 13, color: colorScheme.outline)),
                         ],
-                        const Spacer(),
-                        // Edit button
+                      ),
+                    ],
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
                         IconButton(
                           icon: const Icon(Icons.edit_outlined, size: 20),
                           tooltip: L10n.t('edit'),
@@ -300,21 +304,19 @@ class _DraftsPageState extends State<DraftsPage> {
                           style: TextButton.styleFrom(foregroundColor: colorScheme.error),
                           onPressed: () => _delete(post),
                         ),
-                        if (isDraft) ...[
-                          const SizedBox(width: 8),
+                        const SizedBox(width: 8),
+                        if (isDraft)
                           FilledButton.icon(
                             icon: const Icon(Icons.publish, size: 18),
                             label: Text(L10n.t('publish')),
                             onPressed: () => _publish(post),
-                          ),
-                        ] else ...[
-                          const SizedBox(width: 8),
+                          )
+                        else
                           OutlinedButton.icon(
                             icon: const Icon(Icons.unpublished_outlined, size: 18),
                             label: Text(L10n.t('unpublish')),
                             onPressed: () => _unpublish(post),
                           ),
-                        ],
                       ],
                     ),
                   ],

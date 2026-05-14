@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../config/app_config.dart';
 import '../l10n/app_localizations.dart';
 import '../models/post.dart';
 import '../screens/creator_profile_page.dart';
@@ -163,7 +164,7 @@ class _PostCardState extends State<PostCard> {
                       return ClipRRect(
                         borderRadius: BorderRadius.circular(6),
                         child: Image.network(
-                          att.url,
+                          AppConfig.absoluteUrl(att.url),
                           width: 80,
                           height: 80,
                           fit: BoxFit.cover,
@@ -281,7 +282,7 @@ class _CreatorRow extends StatelessWidget {
           radius: 14,
           backgroundColor: colorScheme.primary,
           backgroundImage: creator.avatarUrl != null
-              ? NetworkImage(creator.avatarUrl!)
+              ? NetworkImage(AppConfig.absoluteUrl(creator.avatarUrl!))
               : null,
           child: creator.avatarUrl == null
               ? Text(

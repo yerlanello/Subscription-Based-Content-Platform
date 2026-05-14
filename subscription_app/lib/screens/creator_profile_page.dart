@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import '../config/app_config.dart';
 import '../l10n/app_localizations.dart';
 import '../models/creator.dart';
 import '../models/post.dart';
@@ -8,6 +10,7 @@ import '../services/auth_service.dart';
 import '../services/creators_service.dart';
 import '../services/posts_service.dart';
 import '../widgets/post_card.dart';
+import 'payment_waiting_page.dart';
 
 class CreatorProfilePage extends StatefulWidget {
   const CreatorProfilePage({super.key, required this.username});
@@ -119,6 +122,8 @@ class _CreatorProfilePageState extends State<CreatorProfilePage> {
     try {
       if (_creator!.isSubscribed) {
         await _confirmUnsubscribe();
+      } else if (!_creator!.profile.isFree) {
+        await _presentSubscriptionSheet();
       } else {
         await CreatorsService.subscribe(widget.username);
         await _reload();
@@ -127,6 +132,82 @@ class _CreatorProfilePageState extends State<CreatorProfilePage> {
       if (mounted) setState(() => _subscribeError = e.toString());
     } finally {
       if (mounted) setState(() => _subscribing = false);
+    }
+  }
+
+  Future<void> _presentSubscriptionSheet() async {
+    final url = await CreatorsService.checkoutIntent(widget.username);
+    if (!mounted) return;
+    final sessionId = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => PaymentWaitingPage(checkoutUrl: url, title: 'Subscribe'),
+      ),
+    );
+    if (sessionId == null || !mounted) return;
+    try {
+      await CreatorsService.verifySubscription(sessionId)
+          .timeout(const Duration(seconds: 30));
+      await _reload();
+    } on TimeoutException {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text(
+                  'Verification timed out. Your subscription may still be activated.')),
+        );
+      }
+    }
+  }
+
+  Future<void> _processDonation() async {
+    if (_creator == null) return;
+    final result = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) =>
+          _DonateSheet(creatorName: _creator!.profile.displayName),
+    );
+    if (result == null || !mounted) return;
+
+    final amountTenge = result['amount'] as int;
+    final message = result['message'] as String?;
+
+    try {
+      final url = await CreatorsService.donateIntent(
+        widget.username,
+        amountTenge,
+        message: message,
+      );
+      if (!mounted) return;
+      final sessionId = await Navigator.of(context).push<String>(
+        MaterialPageRoute(
+          builder: (_) =>
+              PaymentWaitingPage(checkoutUrl: url, title: 'Donate'),
+        ),
+      );
+      if (sessionId == null || !mounted) return;
+      try {
+        await CreatorsService.verifyDonation(sessionId)
+            .timeout(const Duration(seconds: 30));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Donation sent! Thank you.')),
+          );
+        }
+      } on TimeoutException {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text(
+                    'Verification timed out. Your payment may still be processed.')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Donation failed: $e')));
+      }
     }
   }
 
@@ -291,7 +372,7 @@ class _CreatorProfilePageState extends State<CreatorProfilePage> {
           height: 120,
           color: colorScheme.primaryContainer,
           child: profile.coverUrl != null
-              ? Image.network(profile.coverUrl!,
+              ? Image.network(AppConfig.absoluteUrl(profile.coverUrl!),
                   fit: BoxFit.cover, width: double.infinity)
               : null,
         ),
@@ -306,7 +387,7 @@ class _CreatorProfilePageState extends State<CreatorProfilePage> {
                   radius: 36,
                   backgroundColor: colorScheme.primary,
                   backgroundImage: creator.user.avatarUrl != null
-                      ? NetworkImage(creator.user.avatarUrl!)
+                      ? NetworkImage(AppConfig.absoluteUrl(creator.user.avatarUrl!))
                       : null,
                   child: creator.user.avatarUrl == null
                       ? Text(
@@ -339,11 +420,10 @@ class _CreatorProfilePageState extends State<CreatorProfilePage> {
                   ),
                 ],
                 // Bio / description
-                if (profile.description != null &&
-                    profile.description!.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Text(profile.description!,
-                      style: Theme.of(context).textTheme.bodyMedium),
+                if (creator.user.bio != null &&
+                    creator.user.bio!.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  _BioSection(bio: creator.user.bio!),
                 ],
                 const SizedBox(height: 12),
                 // Subscriber / follower counts
@@ -409,6 +489,15 @@ class _CreatorProfilePageState extends State<CreatorProfilePage> {
                                 : L10n.t('follow')),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.volunteer_activism, size: 18),
+                      label: const Text('Donate'),
+                      onPressed: _processDonation,
+                    ),
                   ),
                 ],
               ],
@@ -535,7 +624,7 @@ class _CreatorProfilePageState extends State<CreatorProfilePage> {
                         radius: 40,
                         backgroundColor: colorScheme.primary,
                         backgroundImage: user?.avatarUrl != null
-                            ? NetworkImage(user!.avatarUrl!)
+                            ? NetworkImage(AppConfig.absoluteUrl(user!.avatarUrl!))
                             : null,
                         child: user?.avatarUrl == null
                             ? Text(
@@ -607,6 +696,75 @@ class _CreatorProfilePageState extends State<CreatorProfilePage> {
   }
 }
 
+class _BioSection extends StatefulWidget {
+  const _BioSection({required this.bio});
+  final String bio;
+
+  @override
+  State<_BioSection> createState() => _BioSectionState();
+}
+
+class _BioSectionState extends State<_BioSection> {
+  bool _expanded = false;
+  static const _maxLines = 3;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
+      height: 1.55,
+      color: colorScheme.onSurface.withAlpha(210),
+    );
+
+    return LayoutBuilder(builder: (context, constraints) {
+      final tp = TextPainter(
+        text: TextSpan(text: widget.bio, style: textStyle),
+        maxLines: _maxLines,
+        textDirection: TextDirection.ltr,
+      )..layout(maxWidth: constraints.maxWidth - 24);
+      final overflows = tp.didExceedMaxLines;
+
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerHighest.withAlpha(120),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AnimatedSize(
+              duration: const Duration(milliseconds: 260),
+              curve: Curves.easeInOut,
+              child: Text(
+                widget.bio,
+                style: textStyle,
+                maxLines: _expanded ? null : _maxLines,
+                overflow: _expanded ? null : TextOverflow.ellipsis,
+              ),
+            ),
+            if (overflows) ...[
+              const SizedBox(height: 6),
+              GestureDetector(
+                onTap: () => setState(() => _expanded = !_expanded),
+                child: Text(
+                  _expanded ? 'Show less' : 'Read more',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: colorScheme.primary,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+    });
+  }
+}
+
 class _CountChip extends StatelessWidget {
   const _CountChip({required this.count, required this.label});
   final int count;
@@ -631,6 +789,180 @@ class _CountChip extends StatelessWidget {
                 ?.copyWith(
                     color: Theme.of(context).colorScheme.outline)),
       ],
+    );
+  }
+}
+
+class _DonateSheet extends StatefulWidget {
+  const _DonateSheet({required this.creatorName});
+  final String creatorName;
+
+  @override
+  State<_DonateSheet> createState() => _DonateSheetState();
+}
+
+class _DonateSheetState extends State<_DonateSheet> {
+  final _amountController = TextEditingController();
+  final _messageController = TextEditingController();
+  int? _selectedPreset;
+
+  static const _presets = [500, 1000, 2500, 5000];
+  static const _confirmThreshold = 50000.0;
+  static const _reenterThreshold = 150000.0;
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    _messageController.dispose();
+    super.dispose();
+  }
+
+  double? get _amount {
+    if (_selectedPreset != null) return _selectedPreset!.toDouble();
+    return double.tryParse(_amountController.text.trim());
+  }
+
+  Future<void> _submit() async {
+    final tenge = _amount;
+    if (tenge == null || tenge <= 0) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Enter a valid amount')));
+      return;
+    }
+    if (tenge > 9999999) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Maximum donation is ₸9,999,999')));
+      return;
+    }
+
+    if (tenge >= _confirmThreshold) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Confirm donation'),
+          content:
+              Text('Send ₸${tenge.toInt()} to ${widget.creatorName}?'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel')),
+            FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Confirm')),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+    }
+
+    if (tenge >= _reenterThreshold) {
+      final reentered = await showDialog<String>(
+        context: context,
+        builder: (ctx) {
+          final ctrl = TextEditingController();
+          return AlertDialog(
+            title: const Text('Re-enter amount'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Re-enter the amount to confirm:'),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: ctrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                      prefixText: '₸ ', border: OutlineInputBorder()),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel')),
+              FilledButton(
+                  onPressed: () => Navigator.pop(ctx, ctrl.text),
+                  child: const Text('Confirm')),
+            ],
+          );
+        },
+      );
+      if (reentered == null || !mounted) return;
+      if (double.tryParse(reentered) != tenge) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Amounts do not match')));
+        return;
+      }
+    }
+
+    final message = _messageController.text.trim();
+    if (mounted) {
+      Navigator.of(context).pop({
+        'amount': tenge.round(),
+        'message': message.isEmpty ? null : message,
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+          16, 16, 16, MediaQuery.of(context).viewInsets.bottom + 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Donate to ${widget.creatorName}',
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            children: _presets
+                .map((p) => ChoiceChip(
+                      label: Text('₸$p'),
+                      selected: _selectedPreset == p,
+                      onSelected: (sel) => setState(() {
+                        _selectedPreset = sel ? p : null;
+                        _amountController.text = sel ? p.toString() : '';
+                      }),
+                    ))
+                .toList(),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _amountController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Custom amount',
+              prefixText: '₸ ',
+              border: OutlineInputBorder(),
+            ),
+            onChanged: (_) => setState(() => _selectedPreset = null),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _messageController,
+            decoration: const InputDecoration(
+              labelText: 'Message (optional)',
+              border: OutlineInputBorder(),
+            ),
+            maxLines: 2,
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: _submit,
+              child: const Text('Donate'),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

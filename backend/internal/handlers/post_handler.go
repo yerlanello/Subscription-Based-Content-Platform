@@ -454,6 +454,8 @@ var allowedMimeTypes = map[string]string{
 	".wav":  "audio/wav",
 	".ogg":  "audio/ogg",
 	".m4a":  "audio/mp4",
+	".pdf":  "application/pdf",
+	".txt":  "text/plain",
 }
 
 func (h *PostHandler) UploadAttachment(w http.ResponseWriter, r *http.Request) {
@@ -529,4 +531,40 @@ func (h *PostHandler) DeleteAttachment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.NoContent(w)
+}
+
+// AddAttachmentURL stores an external URL (e.g. a direct video link) as an attachment.
+func (h *PostHandler) AddAttachmentURL(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r)
+	postID, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid post id")
+		return
+	}
+
+	if _, err := h.postSvc.GetOwn(r.Context(), postID, claims.UserID); err != nil {
+		response.Error(w, http.StatusForbidden, "forbidden")
+		return
+	}
+
+	var body struct {
+		URL string `json:"url"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.URL == "" {
+		response.Error(w, http.StatusBadRequest, "url is required")
+		return
+	}
+
+	ext := strings.ToLower(filepath.Ext(body.URL))
+	mimeType := "video/url"
+	if m, ok := allowedMimeTypes[ext]; ok {
+		mimeType = m
+	}
+
+	attachment, err := h.postSvc.AddAttachment(r.Context(), postID, body.URL, mimeType, 0)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	response.Created(w, attachment)
 }

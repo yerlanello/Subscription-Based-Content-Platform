@@ -182,6 +182,8 @@ func main() {
 			r.With(authMiddleware).Delete("/{username}/follow", creatorH.Unfollow)
 			r.With(optionalAuth).Get("/{username}/posts", postH.ListByCreator)
 			r.With(authMiddleware).Post("/{username}/checkout", stripeH.CreateCheckout)
+			r.With(authMiddleware).Post("/{username}/checkout-intent", stripeH.CreateSubscriptionIntent)
+			r.With(authMiddleware).Post("/{username}/donate-intent", stripeH.CreateDonationIntent)
 			r.With(authMiddleware).Post("/{username}/cover", creatorH.UploadCover)
 		})
 
@@ -223,6 +225,7 @@ func main() {
 			r.With(authMiddleware).Post("/{id}/comments/{commentId}/like", postH.LikeComment)
 			r.With(authMiddleware).Delete("/{id}/comments/{commentId}/like", postH.UnlikeComment)
 			r.With(authMiddleware).Post("/{id}/attachments", postH.UploadAttachment)
+			r.With(authMiddleware).Post("/{id}/attachments/url", postH.AddAttachmentURL)
 			r.With(authMiddleware).Delete("/{id}/attachments/{attachmentId}", postH.DeleteAttachment)
 			r.With(authMiddleware).Post("/{id}/pin", postH.PinPost)
 			r.With(authMiddleware).Delete("/{id}/pin", postH.UnpinPost)
