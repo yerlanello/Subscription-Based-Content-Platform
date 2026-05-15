@@ -17,7 +17,7 @@ class L10n {
       'new_post': 'New Post',
       'my_posts': 'My Posts',
       'subscribe': 'Subscribe',
-      'subscribed': 'Subscribed ✓',
+      'subscribed': 'Subscribed',
       'subscribe_free': 'Subscribe (Free)',
       'follow': 'Follow',
       'following': 'Following',
@@ -120,102 +120,136 @@ class L10n {
       'my_subscriptions': 'Мои подписки',
       'new_post': 'Новый пост',
       'my_posts': 'Мои посты',
-      'subscribe': 'Подписаться',
-      'subscribed': 'Подписан ✓',
-      'subscribe_free': 'Подписаться (бесплатно)',
-      'follow': 'Следить',
-      'following': 'Слежу',
-      'unfollow': 'Отписаться',
+
+      // Paid subscription
+      'subscribe': 'Оформить подписку',
+      'subscribed': 'Подписка активна ✓',
+      'subscribe_free': 'Бесплатная подписка',
       'unsubscribe': 'Отменить подписку',
+
+      // Social follow
+      'follow': 'Подписаться',
+      'following': 'Вы подписаны',
+      'unfollow': 'Отписаться',
+
       'save': 'Сохранить',
       'cancel': 'Отмена',
       'delete': 'Удалить',
       'publish': 'Опубликовать',
-      'unpublish': 'Снять с публикации',
+      'unpublish': 'Скрыть',
       'edit': 'Редактировать',
       'draft': 'Черновик',
       'published': 'Опубликован',
       'paid': 'Платный',
+
       'free_post': 'Бесплатный пост',
       'free_post_subtitle': 'Виден всем, не только подписчикам',
+
       'publish_immediately': 'Опубликовать сразу',
-      'publish_immediately_subtitle': 'Выключите, чтобы сохранить черновик',
+      'publish_immediately_subtitle': 'Выключите, чтобы сохранить как черновик',
+
       'title': 'Заголовок',
-      'content': 'Содержание',
+      'content': 'Контент',
       'bio': 'О себе',
+
       'write_something': 'Напишите что-нибудь...',
       'what_is_post_about': 'О чём этот пост?',
       'add_attachments': 'Добавить изображения',
+
       'no_posts_yet': 'Постов пока нет',
-      'feed_empty': 'Лента пуста',
-      'feed_empty_subtitle': 'Подпишитесь на авторов, чтобы видеть их посты.',
+      'feed_empty': 'Лента пока пуста',
+      'feed_empty_subtitle':
+          'Подпишитесь на авторов, чтобы видеть их посты.',
+
       'no_notifications': 'Нет уведомлений',
       'no_notifications_subtitle': 'Всё прочитано!',
-      'mark_all_read': 'Отметить все прочитанными',
+      'mark_all_read': 'Отметить всё как прочитанное',
+
       'appearance': 'Оформление',
       'language': 'Язык',
+
       'light': 'Светлая',
       'dark': 'Тёмная',
       'system': 'Системная',
+
       'preferences': 'НАСТРОЙКИ',
       'privacy_security': 'КОНФИДЕНЦИАЛЬНОСТЬ',
       'about': 'О ПРИЛОЖЕНИИ',
+
       'change_password': 'Изменить пароль',
       'privacy_policy': 'Политика конфиденциальности',
       'terms_of_service': 'Условия использования',
       'app_version': 'Версия приложения',
       'help_support': 'Помощь и поддержка',
       'log_out': 'Выйти',
+
       'subscriptions': 'Подписки',
-      'following_count': 'Слежу',
+      'following_count': 'Подписки',
+
       'role': 'Роль',
       'creator': 'АВТОР',
       'profile': 'ПРОФИЛЬ',
+
       'retry': 'Повторить',
       'refresh': 'Обновить',
+
       'post_saved': 'Пост сохранён!',
       'post_published': 'Пост опубликован!',
       'draft_saved': 'Черновик сохранён.',
       'post_deleted': 'Пост удалён',
-      'title_required': 'Заголовок обязателен',
+
+      'title_required': 'Введите заголовок',
+
       'unsubscribe_confirm': 'Отменить подписку?',
       'delete_post_confirm': 'Удалить пост?',
       'delete_cannot_undo': 'Это действие нельзя отменить.',
+
       'comments': 'Комментарии',
       'no_comments': 'Комментариев пока нет. Будьте первым!',
       'reply': 'Ответить',
       'write_comment': 'Написать комментарий…',
-      'replying_to': 'Ответ пользователю',
-      'subscribe_to_read': 'Подпишитесь, чтобы читать этот пост',
+      'replying_to': 'В ответ на',
+
+      'subscribe_to_read': 'Оформите подписку, чтобы читать этот пост',
       'support_creators': 'Поддержите любимых авторов',
       'exclusive_content': 'Подпишитесь и получите эксклюзивный контент',
+
       'search_creators': 'Поиск авторов…',
       'no_creators_yet': 'Авторов пока нет.',
       'no_match_search': 'Авторы не найдены.',
+
       'current_password': 'Текущий пароль',
       'new_password': 'Новый пароль',
       'confirm_password': 'Подтвердите новый пароль',
+
       'passwords_no_match': 'Пароли не совпадают',
       'password_changed': 'Пароль успешно изменён',
       'wrong_password': 'Неверный текущий пароль',
+
       'subscribers': 'Подписчики',
-      'followers': 'Последователи',
+      'followers': 'Подписчики',
+
       'filter_all': 'Все',
       'filter_free': 'Бесплатные',
       'filter_paid': 'Платные',
+
       'pinned': 'Закреплено',
       'pin': 'Закрепить',
       'unpin': 'Открепить',
-      'no_subscriptions': 'Нет подписок',
-      'no_subscriptions_subtitle': 'Подпишитесь на авторов, чтобы увидеть их здесь.',
+
+      'no_subscriptions': 'Подписок пока нет',
+      'no_subscriptions_subtitle':
+          'Оформите подписку на автора, чтобы увидеть его здесь.',
+
       'not_a_creator': 'Не автор',
-      'not_a_creator_subtitle': 'Этот пользователь не настроил профиль автора.',
+      'not_a_creator_subtitle':
+          'Этот пользователь ещё не настроил профиль автора.',
     },
     'kk': {
-      'feed': 'Лента',
+      'feed': 'Таспа',
       'authors': 'Авторлар',
       'posts': 'Жазбалар',
-      'account': 'Аккаунт',
+      'account': 'Тіркелгі',
       'settings': 'Параметрлер',
       'notifications': 'Хабарландырулар',
       'edit_profile': 'Профильді өңдеу',
@@ -224,96 +258,141 @@ class L10n {
       'my_subscriptions': 'Менің жазылымдарым',
       'new_post': 'Жаңа жазба',
       'my_posts': 'Менің жазбаларым',
-      'subscribe': 'Жазылу',
-      'subscribed': 'Жазылдым ✓',
-      'subscribe_free': 'Жазылу (тегін)',
-      'follow': 'Бақылау',
-      'following': 'Бақылаудамын',
-      'unfollow': 'Бақылауды тоқтату',
-      'unsubscribe': 'Жазылымды болдырмау',
+
+      // Paid subscription
+      'subscribe': 'Жазылым рәсімдеу',
+      'subscribed': 'Жазылым белсенді ✓',
+      'subscribe_free': 'Тегін жазылым',
+      'unsubscribe': 'Жазылымнан бас тарту',
+
+      // Social follow
+      'follow': 'Жазылу',
+      'following': 'Жазылған',
+      'unfollow': 'Жазылымнан шығу',
+
       'save': 'Сақтау',
       'cancel': 'Болдырмау',
       'delete': 'Жою',
       'publish': 'Жариялау',
-      'unpublish': 'Жариялауды алу',
+      'unpublish': 'Жасыру',
       'edit': 'Өңдеу',
+
       'draft': 'Жоба',
-      'published': 'Жарияланған',
+      'published': 'Жарияланды',
       'paid': 'Ақылы',
+
       'free_post': 'Тегін жазба',
-      'free_post_subtitle': 'Барлығына көрінеді, тек жазылушыларға емес',
+      'free_post_subtitle':
+          'Барлығына көрінеді, тек жазылушыларға ғана емес',
+
       'publish_immediately': 'Бірден жариялау',
-      'publish_immediately_subtitle': 'Жоба ретінде сақтау үшін өшіріңіз',
+      'publish_immediately_subtitle':
+          'Жоба ретінде сақтау үшін өшіріңіз',
+
       'title': 'Тақырып',
-      'content': 'Мазмұн',
+      'content': 'Контент',
       'bio': 'Өзім туралы',
+
       'write_something': 'Бірдеңе жазыңыз...',
       'what_is_post_about': 'Бұл жазба не туралы?',
       'add_attachments': 'Суреттер қосу',
-      'no_posts_yet': 'Жазбалар жоқ',
-      'feed_empty': 'Лента бос',
-      'feed_empty_subtitle': 'Жазбаларын көру үшін авторларға жазылыңыз.',
+
+      'no_posts_yet': 'Әлі жазбалар жоқ',
+      'feed_empty': 'Таспа бос',
+      'feed_empty_subtitle':
+          'Жазбаларын көру үшін авторларға жазылыңыз.',
+
       'no_notifications': 'Хабарландырулар жоқ',
       'no_notifications_subtitle': 'Барлығы оқылды!',
+
       'mark_all_read': 'Барлығын оқылды деп белгілеу',
-      'appearance': 'Сыртқы түр',
+
+      'appearance': 'Көрініс',
       'language': 'Тіл',
+
       'light': 'Ашық',
       'dark': 'Қараңғы',
       'system': 'Жүйелік',
+
       'preferences': 'ПАРАМЕТРЛЕР',
       'privacy_security': 'ҚҰПИЯЛЫЛЫҚ',
       'about': 'ҚОЛДАНБА ТУРАЛЫ',
+
       'change_password': 'Құпия сөзді өзгерту',
       'privacy_policy': 'Құпиялылық саясаты',
       'terms_of_service': 'Пайдалану шарттары',
+
       'app_version': 'Қолданба нұсқасы',
       'help_support': 'Көмек және қолдау',
       'log_out': 'Шығу',
+
       'subscriptions': 'Жазылымдар',
-      'following_count': 'Бақылаулар',
+      'following_count': 'Жазылғандар',
+
       'role': 'Рөл',
       'creator': 'АВТОР',
       'profile': 'ПРОФИЛЬ',
+
       'retry': 'Қайталау',
       'refresh': 'Жаңарту',
+
       'post_saved': 'Жазба сақталды!',
       'post_published': 'Жазба жарияланды!',
       'draft_saved': 'Жоба сақталды.',
       'post_deleted': 'Жазба жойылды',
+
       'title_required': 'Тақырып міндетті',
-      'unsubscribe_confirm': 'Жазылымды болдырмау?',
-      'delete_post_confirm': 'Жазбаны жою?',
-      'delete_cannot_undo': 'Бұл әрекетті болдырмауға болмайды.',
+
+      'unsubscribe_confirm': 'Жазылымнан бас тартасыз ба?',
+      'delete_post_confirm': 'Жазбаны жою керек пе?',
+      'delete_cannot_undo': 'Бұл әрекетті қайтару мүмкін емес.',
+
       'comments': 'Пікірлер',
       'no_comments': 'Әлі пікір жоқ. Бірінші болыңыз!',
       'reply': 'Жауап беру',
+
       'write_comment': 'Пікір жазыңыз…',
-      'replying_to': 'Жауап беру',
-      'subscribe_to_read': 'Оқу үшін жазылыңыз',
+      'replying_to': 'Жауап ретінде',
+
+      'subscribe_to_read': 'Бұл жазбаны оқу үшін жазылыңыз',
+
       'support_creators': 'Сүйікті авторларыңызды қолдаңыз',
-      'exclusive_content': 'Жазылып, эксклюзивті мазмұн алыңыз',
+      'exclusive_content':
+          'Жазылып, эксклюзивті контент алыңыз',
+
       'search_creators': 'Авторларды іздеу…',
+
       'no_creators_yet': 'Әлі авторлар жоқ.',
       'no_match_search': 'Авторлар табылмады.',
+
       'current_password': 'Ағымдағы құпия сөз',
       'new_password': 'Жаңа құпия сөз',
+
       'confirm_password': 'Жаңа құпия сөзді растаңыз',
+
       'passwords_no_match': 'Құпия сөздер сәйкес келмейді',
       'password_changed': 'Құпия сөз сәтті өзгертілді',
+
       'wrong_password': 'Ағымдағы құпия сөз қате',
+
       'subscribers': 'Жазылушылар',
-      'followers': 'Ізбасарлар',
+      'followers': 'Жазылушылар',
+
       'filter_all': 'Барлығы',
       'filter_free': 'Тегін',
       'filter_paid': 'Ақылы',
-      'pinned': 'Бекітілген',
+
+      'pinned': 'Бекітілді',
       'pin': 'Бекіту',
-      'unpin': 'Шешу',
-      'no_subscriptions': 'Жазылымдар жоқ',
-      'no_subscriptions_subtitle': 'Авторларға жазылыңыз.',
+      'unpin': 'Бекітуден шығару',
+
+      'no_subscriptions': 'Әлі жазылымдар жоқ',
+      'no_subscriptions_subtitle':
+          'Авторға жазылып, оны осы жерден көріңіз.',
+
       'not_a_creator': 'Автор емес',
-      'not_a_creator_subtitle': 'Бұл пайдаланушы автор профилін орнатпаған.',
+      'not_a_creator_subtitle':
+          'Бұл пайдаланушы автор профилін әлі орнатпаған.',
     },
   };
 
