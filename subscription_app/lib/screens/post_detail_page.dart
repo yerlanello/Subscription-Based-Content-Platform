@@ -49,6 +49,10 @@ class _PostDetailPageState extends State<PostDetailPage> {
     super.dispose();
   }
 
+  void _popWithResult() {
+    Navigator.of(context).pop({'liked': _liked, 'likesCount': _likesCount});
+  }
+
   Future<void> _loadUsername() async {
     final u = await AuthService.getUsername();
     if (mounted) setState(() => _currentUsername = u);
@@ -132,8 +136,12 @@ class _PostDetailPageState extends State<PostDetailPage> {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) { if (!didPop) _popWithResult(); },
+      child: Scaffold(
       appBar: AppBar(
+        leading: BackButton(onPressed: _popWithResult),
         title: post.creator != null
             ? GestureDetector(
                 onTap: () => Navigator.of(context).push(MaterialPageRoute(
@@ -342,7 +350,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
           ),
         ],
       ),
-    );
+    ), // Scaffold
+    ); // PopScope
   }
 
   String _formatDate(String iso) {

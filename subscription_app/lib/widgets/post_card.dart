@@ -25,6 +25,16 @@ class _PostCardState extends State<PostCard> {
     _likesCount = widget.post.likesCount;
   }
 
+  @override
+  void didUpdateWidget(PostCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Sync when the parent provides a freshly fetched Post (e.g. after pull-to-refresh).
+    if (oldWidget.post.id != widget.post.id) {
+      _liked = widget.post.isLiked;
+      _likesCount = widget.post.likesCount;
+    }
+  }
+
   Future<void> _toggleLike() async {
     final wasLiked = _liked;
     setState(() {
@@ -37,12 +47,15 @@ class _PostCardState extends State<PostCard> {
       } else {
         await PostsService.like(widget.post.id);
       }
-    } catch (_) {
-      // revert on error
+    } catch (e) {
+      if (!mounted) return;
       setState(() {
         _liked = wasLiked;
         _likesCount += wasLiked ? 1 : -1;
       });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
     }
   }
 
@@ -56,13 +69,23 @@ class _PostCardState extends State<PostCard> {
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => Navigator.of(context).push(MaterialPageRoute(
-          builder: (_) => PostDetailPage(
-            post: post,
-            initialIsLiked: _liked,
-            initialLikesCount: _likesCount,
-          ),
-        )),
+        onTap: () async {
+          final result = await Navigator.of(context).push<Map<String, dynamic>>(
+            MaterialPageRoute(
+              builder: (_) => PostDetailPage(
+                post: post,
+                initialIsLiked: _liked,
+                initialLikesCount: _likesCount,
+              ),
+            ),
+          );
+          if (result != null && mounted) {
+            setState(() {
+              _liked = result['liked'] as bool;
+              _likesCount = result['likesCount'] as int;
+            });
+          }
+        },
         child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(

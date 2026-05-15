@@ -2,20 +2,34 @@ import '../models/comment.dart';
 import '../models/post.dart';
 import 'api_client.dart';
 
+final _usernameRe = RegExp(r'^[a-zA-Z0-9_]{1,50}$');
+
+void _validatePagination(int limit, int offset) {
+  if (limit < 1 || limit > 100) throw 'Invalid limit: $limit';
+  if (offset < 0) throw 'Invalid offset: $offset';
+}
+
+void _validateUsername(String username) {
+  if (!_usernameRe.hasMatch(username)) throw 'Invalid username';
+}
+
 class PostsService {
   static Future<List<Post>> feed({int limit = 20, int offset = 0}) async {
+    _validatePagination(limit, offset);
     final res = await ApiClient.get('/posts/feed?limit=$limit&offset=$offset');
     final list = (res['data'] as List<dynamic>?) ?? [];
     return list.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   static Future<List<Post>> explore({int limit = 20, int offset = 0}) async {
+    _validatePagination(limit, offset);
     final res = await ApiClient.get('/posts/explore?limit=$limit&offset=$offset');
     final list = (res['data'] as List<dynamic>?) ?? [];
     return list.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   static Future<List<Post>> recommended({int limit = 20, int offset = 0}) async {
+    _validatePagination(limit, offset);
     final res = await ApiClient.get('/posts/recommended?limit=$limit&offset=$offset');
     final list = (res['data'] as List<dynamic>?) ?? [];
     return list.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
@@ -78,6 +92,8 @@ class PostsService {
     int limit = 20,
     int offset = 0,
   }) async {
+    _validateUsername(username);
+    _validatePagination(limit, offset);
     final res = await ApiClient.get(
         '/creators/$username/posts?limit=$limit&offset=$offset');
     final list = (res['data'] as List<dynamic>?) ?? [];

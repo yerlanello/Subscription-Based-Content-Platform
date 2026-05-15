@@ -2,6 +2,22 @@ import '../models/creator.dart';
 import '../models/post.dart';
 import 'api_client.dart';
 
+final _usernameRe = RegExp(r'^[a-zA-Z0-9_]{1,50}$');
+final _categoryRe = RegExp(r'^[a-zA-Z0-9 _\-]{1,50}$');
+
+void _validateUsername(String username) {
+  if (!_usernameRe.hasMatch(username)) throw 'Invalid username';
+}
+
+void _validateCategory(String category) {
+  if (!_categoryRe.hasMatch(category)) throw 'Invalid category';
+}
+
+void _validatePagination(int limit, int offset) {
+  if (limit < 1 || limit > 100) throw 'Invalid limit: $limit';
+  if (offset < 0) throw 'Invalid offset: $offset';
+}
+
 class CreatorsService {
   /// List all creators.
   static Future<List<CreatorWithProfile>> list({
@@ -9,8 +25,10 @@ class CreatorsService {
     int offset = 0,
     String? category,
   }) async {
+    _validatePagination(limit, offset);
+    if (category != null) _validateCategory(category);
     final query = StringBuffer('/creators?limit=$limit&offset=$offset');
-    if (category != null) query.write('&category=$category');
+    if (category != null) query.write('&category=${Uri.encodeQueryComponent(category)}');
     final res = await ApiClient.get(query.toString());
     final list = (res['data'] as List<dynamic>?) ?? [];
     return list
@@ -20,6 +38,7 @@ class CreatorsService {
 
   /// Fetch a single creator page (includes is_subscribed, is_following).
   static Future<CreatorPage> getCreatorPage(String username) async {
+    _validateUsername(username);
     final res = await ApiClient.get('/creators/$username');
     return CreatorPage.fromJson(res['data'] as Map<String, dynamic>);
   }
@@ -27,16 +46,19 @@ class CreatorsService {
   /// Subscribe to a creator (free subscriptions complete immediately;
   /// paid ones may require Stripe — the backend will reject if so).
   static Future<void> subscribe(String username) async {
+    _validateUsername(username);
     await ApiClient.post('/creators/$username/subscribe');
   }
 
   /// Cancel a subscription.
   static Future<void> unsubscribe(String username) async {
+    _validateUsername(username);
     await ApiClient.delete('/creators/$username/subscribe');
   }
 
   /// Create a Stripe Checkout Session for a paid subscription. Returns the checkout URL (web).
   static Future<String> checkout(String username) async {
+    _validateUsername(username);
     final res = await ApiClient.post('/creators/$username/checkout');
     final data = res['data'] as Map<String, dynamic>;
     return data['url'] as String;
@@ -48,6 +70,7 @@ class CreatorsService {
     int amountCents, {
     String? message,
   }) async {
+    _validateUsername(username);
     final res = await ApiClient.post('/creators/$username/donate', body: {
       'amount_cents': amountCents,
       if (message != null && message.isNotEmpty) 'message': message,
@@ -58,6 +81,7 @@ class CreatorsService {
 
   /// Mobile: creates a Checkout Session for a paid subscription. Returns the Stripe-hosted URL.
   static Future<String> checkoutIntent(String username) async {
+    _validateUsername(username);
     final res = await ApiClient.post('/creators/$username/checkout-intent');
     final data = res['data'] as Map<String, dynamic>;
     return data['url'] as String;
@@ -69,6 +93,7 @@ class CreatorsService {
     int amountCents, {
     String? message,
   }) async {
+    _validateUsername(username);
     final res = await ApiClient.post('/creators/$username/donate-intent', body: {
       'amount_cents': amountCents,
       if (message != null && message.isNotEmpty) 'message': message,
@@ -95,11 +120,13 @@ class CreatorsService {
 
   /// Follow a creator.
   static Future<void> follow(String username) async {
+    _validateUsername(username);
     await ApiClient.post('/creators/$username/follow');
   }
 
   /// Unfollow a creator.
   static Future<void> unfollow(String username) async {
+    _validateUsername(username);
     await ApiClient.delete('/creators/$username/follow');
   }
 
@@ -121,6 +148,8 @@ class CreatorsService {
     int limit = 20,
     int offset = 0,
   }) async {
+    _validateUsername(username);
+    _validatePagination(limit, offset);
     final res = await ApiClient.get(
         '/creators/$username/posts?limit=$limit&offset=$offset');
     final list = (res['data'] as List<dynamic>?) ?? [];

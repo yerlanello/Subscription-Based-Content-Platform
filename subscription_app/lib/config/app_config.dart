@@ -4,7 +4,14 @@ import 'package:flutter/foundation.dart';
 class AppConfig {
   static String get baseUrl {
     const override = String.fromEnvironment('BASE_URL');
-    if (override.isNotEmpty) return override;
+    if (override.isNotEmpty) {
+      assert(
+        override.startsWith('https://'),
+        'BASE_URL must use HTTPS in production. Got: $override',
+      );
+      return override;
+    }
+    // Dev-only fallbacks — never used in production builds (BASE_URL is always set there).
     if (!kIsWeb && Platform.isAndroid) return 'http://10.0.2.2:8080/api';
     return 'http://localhost:8080/api';
   }

@@ -10,6 +10,7 @@ import 'account_page.dart';
 import 'settings_page.dart';
 import 'new_post_page.dart';
 import 'notifications_page.dart';
+import '../services/notifications_service.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -195,7 +196,8 @@ class _NotificationBellState extends State<NotificationBell> {
 
   Future<void> _loadCount() async {
     try {
-      // Fetch count separately to avoid blocking UI
+      final count = await NotificationsService.unreadCount();
+      if (mounted) setState(() => _unread = count);
     } catch (_) {}
   }
 
@@ -212,8 +214,7 @@ class _NotificationBellState extends State<NotificationBell> {
         await Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const NotificationsPage()),
         );
-        // Reload count after returning from notifications
-        setState(() => _unread = 0);
+        _loadCount();
       },
     );
   }

@@ -103,6 +103,13 @@ class _LoginPageState extends State<LoginPage> {
   String? _validatePassword(String? value) {
     if (value == null || value.isEmpty) return 'Password is required';
     if (_isLogin) return null;
+    if (value.length < 8) return 'Password must be at least 8 characters';
+    if (!value.contains(RegExp(r'[A-Z]'))) return 'Must contain an uppercase letter';
+    if (!value.contains(RegExp(r'[a-z]'))) return 'Must contain a lowercase letter';
+    if (!value.contains(RegExp(r'[0-9]'))) return 'Must contain a number';
+    if (!value.contains(RegExp(r'[!@#\$%^&*()\-_=+\[\]{};:,.<>?/\\|`~]'))) {
+      return 'Must contain a special character';
+    }
     return null;
   }
 
