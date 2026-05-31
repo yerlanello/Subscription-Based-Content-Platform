@@ -18,22 +18,28 @@ class AppConfig {
 
   // Returns an absolute URL suitable for the current platform.
   // - Relative paths are prefixed with the server origin.
-  // - Absolute URLs that contain "localhost" are rewritten to 10.0.2.2 on
-  //   Android so the emulator can reach the host machine (Minio, etc.).
+  // - Absolute URLs whose host is localhost/127.0.0.1 are rewritten to the
+  //   host from `baseUrl` so physical devices (which can't reach the host
+  //   machine via "localhost") use the same reachable host as the API. The
+  //   original port is preserved so Minio (9000) and the API (8080) stay
+  //   distinct.
   static String absoluteUrl(String url) {
+    final baseUri = Uri.parse(baseUrl);
     if (url.startsWith('http://') || url.startsWith('https://')) {
-      if (!kIsWeb && Platform.isAndroid) {
-        return url.replaceFirst('localhost', '10.0.2.2');
+      final uri = Uri.tryParse(url);
+      if (uri == null) return url;
+      final isLoopback = uri.host == 'localhost' || uri.host == '127.0.0.1';
+      if (isLoopback && baseUri.host != uri.host) {
+        return uri.replace(host: baseUri.host).toString();
       }
       return url;
     }
     // Relative path → prepend server origin.
-    final uri = Uri.parse(baseUrl);
-    final port = uri.hasPort &&
-            !((uri.scheme == 'https' && uri.port == 443) ||
-                (uri.scheme == 'http' && uri.port == 80))
-        ? ':${uri.port}'
+    final port = baseUri.hasPort &&
+            !((baseUri.scheme == 'https' && baseUri.port == 443) ||
+                (baseUri.scheme == 'http' && baseUri.port == 80))
+        ? ':${baseUri.port}'
         : '';
-    return '${uri.scheme}://${uri.host}$port$url';
+    return '${baseUri.scheme}://${baseUri.host}$port$url';
   }
 }

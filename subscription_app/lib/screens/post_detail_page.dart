@@ -20,6 +20,7 @@ class PostDetailPage extends StatefulWidget {
 }
 
 class _PostDetailPageState extends State<PostDetailPage> {
+  late Post _post;
   late bool _liked;
   late int _likesCount;
 
@@ -37,10 +38,23 @@ class _PostDetailPageState extends State<PostDetailPage> {
   @override
   void initState() {
     super.initState();
+    _post = widget.post;
     _liked = widget.initialIsLiked ?? widget.post.isLiked;
     _likesCount = widget.initialLikesCount ?? widget.post.likesCount;
     _loadComments();
     _loadUsername();
+    _refreshPost();
+  }
+
+  // List endpoints (feed, byCreator) don't return attachments — refetch the
+  // single post so attachments hydrate, matching the web frontend's pattern.
+  Future<void> _refreshPost() async {
+    try {
+      final fresh = await PostsService.getById(widget.post.id);
+      if (mounted) setState(() => _post = fresh);
+    } catch (_) {
+      // Keep the cached post on failure; user can still read what was passed in.
+    }
   }
 
   @override
@@ -132,7 +146,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    final post = widget.post;
+    final post = _post;
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 

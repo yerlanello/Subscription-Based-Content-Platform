@@ -21,6 +21,34 @@ IconData _iconFor(PlatformFile f) {
   return Icons.insert_drive_file_outlined;
 }
 
+Widget _filePlaceholder(BuildContext context, PlatformFile f) {
+  final cs = Theme.of(context).colorScheme;
+  return Container(
+    width: 80, height: 80,
+    decoration: BoxDecoration(
+      color: cs.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(_iconFor(f), color: cs.primary, size: 28),
+        const SizedBox(height: 4),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Text(
+            f.name,
+            style: TextStyle(fontSize: 9, color: cs.outline),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
 IconData _iconForAttachment(PostAttachment a) {
   final mime = a.mimeType ?? '';
   if (mime.startsWith('image/')) return Icons.image_outlined;
@@ -56,6 +84,18 @@ class _EditPostPageState extends State<EditPostPage> {
     _contentController = TextEditingController(text: widget.post.content ?? '');
     _isFree = widget.post.isFree;
     _attachments = List.from(widget.post.attachments);
+    _refreshAttachments();
+  }
+
+  // List endpoints (feed, byCreator) don't return attachments — refetch the
+  // single post so existing attachments show up, matching the web frontend.
+  Future<void> _refreshAttachments() async {
+    try {
+      final fresh = await PostsService.getById(widget.post.id);
+      if (mounted) setState(() => _attachments = List.from(fresh.attachments));
+    } catch (_) {
+      // Keep what we had if the refetch fails.
+    }
   }
 
   @override
@@ -217,31 +257,10 @@ class _EditPostPageState extends State<EditPostPage> {
                                 File(f.path!),
                                 width: 80, height: 80,
                                 fit: BoxFit.cover,
+                                cacheWidth: 240,
+                                errorBuilder: (ctx, _, _) => _filePlaceholder(ctx, f),
                               )
-                            : Container(
-                                width: 80, height: 80,
-                                decoration: BoxDecoration(
-                                  color: colorScheme.surfaceContainerHighest,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(_iconFor(f), color: colorScheme.primary, size: 28),
-                                    const SizedBox(height: 4),
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                                      child: Text(
-                                        f.name,
-                                        style: TextStyle(fontSize: 9, color: colorScheme.outline),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        textAlign: TextAlign.center,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
+                            : _filePlaceholder(context, f),
                       ),
                       Positioned(
                         top: 2, right: 2,

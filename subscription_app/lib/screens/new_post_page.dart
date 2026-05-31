@@ -21,6 +21,34 @@ IconData _iconFor(PlatformFile f) {
   return Icons.insert_drive_file_outlined;
 }
 
+Widget _filePlaceholder(BuildContext context, PlatformFile f) {
+  final cs = Theme.of(context).colorScheme;
+  return Container(
+    width: 80, height: 80,
+    decoration: BoxDecoration(
+      color: cs.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(_iconFor(f), color: cs.primary, size: 28),
+        const SizedBox(height: 4),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Text(
+            f.name,
+            style: TextStyle(fontSize: 9, color: cs.outline),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
 class NewPostPage extends StatefulWidget {
   const NewPostPage({super.key});
 
@@ -209,31 +237,10 @@ class _NewPostPageState extends State<NewPostPage> {
                                 File(f.path!),
                                 width: 80, height: 80,
                                 fit: BoxFit.cover,
+                                cacheWidth: 240,
+                                errorBuilder: (ctx, _, _) => _filePlaceholder(ctx, f),
                               )
-                            : Container(
-                                width: 80, height: 80,
-                                decoration: BoxDecoration(
-                                  color: colorScheme.surfaceContainerHighest,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(_iconFor(f), color: colorScheme.primary, size: 28),
-                                    const SizedBox(height: 4),
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                                      child: Text(
-                                        f.name,
-                                        style: TextStyle(fontSize: 9, color: colorScheme.outline),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        textAlign: TextAlign.center,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
+                            : _filePlaceholder(context, f),
                       ),
                       // Remove button
                       Positioned(
