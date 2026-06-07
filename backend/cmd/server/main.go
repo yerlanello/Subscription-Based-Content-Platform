@@ -143,6 +143,10 @@ func main() {
 	allowedOrigins := []string{"http://localhost:3000", "http://localhost:3001"}
 	if frontendURL := os.Getenv("FRONTEND_URL"); frontendURL != "" {
 		allowedOrigins = append(allowedOrigins, frontendURL)
+		// also allow www. variant
+		if len(frontendURL) > 8 && frontendURL[:8] == "https://" {
+			allowedOrigins = append(allowedOrigins, "https://www."+frontendURL[8:])
+		}
 	}
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   allowedOrigins,
