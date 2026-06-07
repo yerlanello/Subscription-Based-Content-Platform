@@ -30,10 +30,13 @@ func RunMigrations(ctx context.Context, pool *pgxpool.Pool) error {
 	// this is an existing DB. Mark migrations as applied only if their
 	// tables already exist; otherwise let the main loop run them.
 	var count int
-	pool.QueryRow(ctx, `SELECT COUNT(*) FROM schema_migrations`).Scan(&count)
+	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM schema_migrations`).Scan(&count); err != nil {
+		return fmt.Errorf("count schema_migrations: %w", err)
+	}
 	if count == 0 {
 		var usersExists bool
-		pool.QueryRow(ctx, `
+		// Ignore error — if it fails, usersExists stays false and we run all migrations normally
+		_ = pool.QueryRow(ctx, `
 			SELECT EXISTS (
 				SELECT FROM information_schema.tables WHERE table_name = 'users'
 			)
@@ -41,7 +44,10 @@ func RunMigrations(ctx context.Context, pool *pgxpool.Pool) error {
 
 		if usersExists {
 			dir := "migrations"
-			entries, _ := os.ReadDir(dir)
+			entries, err := os.ReadDir(dir)
+			if err != nil {
+				return fmt.Errorf("read migrations dir: %w", err)
+			}
 			marked := 0
 			for _, e := range entries {
 				if e.IsDir() || !strings.HasSuffix(e.Name(), ".sql") {
@@ -49,13 +55,17 @@ func RunMigrations(ctx context.Context, pool *pgxpool.Pool) error {
 				}
 				sqlBytes, err := os.ReadFile(filepath.Join(dir, e.Name()))
 				if err != nil {
+					log.Printf("warn: read migration %s: %v", e.Name(), err)
 					continue
 				}
 				if migrationTablesExist(ctx, pool, string(sqlBytes)) {
-					pool.Exec(ctx, `
+					if _, err := pool.Exec(ctx, `
 						INSERT INTO schema_migrations (filename) VALUES ($1) ON CONFLICT DO NOTHING
-					`, e.Name())
-					marked++
+					`, e.Name()); err != nil {
+						log.Printf("warn: mark migration %s: %v", e.Name(), err)
+					} else {
+						marked++
+					}
 				}
 			}
 			log.Printf("schema_migrations: existing DB detected, marked %d migrations as applied", marked)

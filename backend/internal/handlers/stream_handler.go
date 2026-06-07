@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"time"
@@ -109,7 +110,9 @@ func (h *StreamHandler) Start(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// End any existing live stream for this user before starting a new one
-	h.streamRepo.EndAllByCreator(r.Context(), claims.UserID)
+	if err := h.streamRepo.EndAllByCreator(r.Context(), claims.UserID); err != nil {
+		log.Printf("warn: end previous streams for %s: %v", claims.UserID, err)
+	}
 
 	roomName := "stream-" + claims.UserID.String()
 	stream, err := h.streamRepo.Create(r.Context(), claims.UserID, input.Title, roomName)

@@ -178,6 +178,7 @@ export default function GoLivePage() {
   const [token, setToken] = useState("");
   const [livekitUrl, setLivekitUrl] = useState("");
   const [streamId, setStreamId] = useState("");
+  const [shareLocation, setShareLocation] = useState(false);
   const [locationEnabled, setLocationEnabled] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -194,11 +195,18 @@ export default function GoLivePage() {
           setLivekitUrl(d.livekit_url);
           setStreamId(d.stream.id);
           setTitle(d.stream.title);
+          // Restore shareLocation from sessionStorage if available
+          try {
+            const cached = sessionStorage.getItem(SESSION_KEY);
+            if (cached) {
+              const parsed = JSON.parse(cached);
+              setShareLocation(parsed.shareLocation ?? false);
+            }
+          } catch { /* ignore */ }
           setStep("live");
-          // Also persist to sessionStorage for extra reliability
           sessionStorage.setItem(
             SESSION_KEY,
-            JSON.stringify({ streamId: d.stream.id, title: d.stream.title })
+            JSON.stringify({ streamId: d.stream.id, title: d.stream.title, shareLocation })
           );
         } else {
           // No active stream — clear any stale session
@@ -209,9 +217,9 @@ export default function GoLivePage() {
       .finally(() => setInitializing(false));
   }, []);
 
-  // Watch geolocation while live
+  // Watch geolocation while live (only if author opted in)
   useEffect(() => {
-    if (step !== "live" || !streamId || !navigator.geolocation) return;
+    if (step !== "live" || !streamId || !shareLocation || !navigator.geolocation) return;
 
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
@@ -228,7 +236,7 @@ export default function GoLivePage() {
         watchIdRef.current = null;
       }
     };
-  }, [step, streamId]);
+  }, [step, streamId, shareLocation]);
 
   const startStream = async () => {
     if (!title.trim()) { setError("Введите название эфира"); return; }
@@ -243,7 +251,7 @@ export default function GoLivePage() {
       setStep("live");
       sessionStorage.setItem(
         SESSION_KEY,
-        JSON.stringify({ streamId: d.stream.id, title })
+        JSON.stringify({ streamId: d.stream.id, title, shareLocation })
       );
       queryClient.invalidateQueries({ queryKey: ["streams"] });
     } catch {
@@ -294,10 +302,22 @@ export default function GoLivePage() {
                 autoFocus
               />
             </div>
-            <div className="flex items-center gap-2 rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:bg-blue-900/20 dark:text-blue-300">
-              <MapPin size={15} />
-              Ваше местоположение будет автоматически показано на карте
-            </div>
+            <label className="flex cursor-pointer items-center justify-between rounded-lg border border-gray-200 px-4 py-3 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800">
+              <div className="flex items-center gap-2 text-sm">
+                <MapPin size={15} className={shareLocation ? "text-brand-600" : "text-gray-400"} />
+                <span>Показывать местоположение на карте</span>
+              </div>
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  className="sr-only"
+                  checked={shareLocation}
+                  onChange={(e) => setShareLocation(e.target.checked)}
+                />
+                <div className={`h-6 w-11 rounded-full transition-colors ${shareLocation ? "bg-brand-600" : "bg-gray-300 dark:bg-gray-600"}`} />
+                <div className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${shareLocation ? "translate-x-5" : "translate-x-0.5"}`} />
+              </div>
+            </label>
             {error && (
               <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-900/20">
                 {error}
