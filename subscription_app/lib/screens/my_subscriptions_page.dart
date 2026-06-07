@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../config/app_config.dart';
 import '../l10n/app_localizations.dart';
 import '../models/creator.dart';
 import '../services/creators_service.dart';
@@ -99,7 +100,7 @@ class _MySubscriptionsPageState extends State<MySubscriptionsPage> {
                   radius: 24,
                   backgroundColor: colorScheme.primary,
                   backgroundImage: c.user.avatarUrl != null
-                      ? NetworkImage(c.user.avatarUrl!)
+                      ? NetworkImage(AppConfig.absoluteUrl(c.user.avatarUrl!))
                       : null,
                   child: c.user.avatarUrl == null
                       ? Text(

@@ -423,9 +423,21 @@ class _AttachmentItem extends StatelessWidget {
       );
     }
 
-    // Videos — both uploaded files and external URLs
+    // Videos
     if (mime.startsWith('video/')) {
-      return VideoPlayerWidget(url: attachment.url);
+      // External links (e.g. YouTube) are tagged 'video/url'. They're web pages,
+      // not direct media streams, so the native player (ExoPlayer) can't decode
+      // them — open them in the browser / YouTube app instead. Uploaded files and
+      // direct .mp4 URLs get a real video/* mime and play inline.
+      if (mime == 'video/url') {
+        return _FileTile(
+          icon: Icons.play_circle_outline,
+          label: 'Watch video',
+          url: attachment.url,
+          color: colorScheme.primary,
+        );
+      }
+      return VideoPlayerWidget(url: AppConfig.absoluteUrl(attachment.url));
     }
 
     // Audio

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../config/app_config.dart';
 import '../l10n/app_localizations.dart';
 import '../models/creator.dart';
 import '../services/app_settings_service.dart';
@@ -253,13 +254,13 @@ class _CreatorCard extends StatelessWidget {
               height: 80,
               color: colorScheme.secondaryContainer,
               child: profile.coverUrl != null
-                  ? Image.network(profile.coverUrl!, fit: BoxFit.cover, width: double.infinity)
+                  ? Image.network(AppConfig.absoluteUrl(profile.coverUrl!), fit: BoxFit.cover, width: double.infinity)
                   : Center(
                       child: CircleAvatar(
                         radius: 28,
                         backgroundColor: colorScheme.primary,
                         backgroundImage: creator.user.avatarUrl != null
-                            ? NetworkImage(creator.user.avatarUrl!)
+                            ? NetworkImage(AppConfig.absoluteUrl(creator.user.avatarUrl!))
                             : null,
                         child: creator.user.avatarUrl == null
                             ? Text(

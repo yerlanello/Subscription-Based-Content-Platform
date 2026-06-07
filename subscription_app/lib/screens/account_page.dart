@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import '../config/app_config.dart';
 import '../l10n/app_localizations.dart';
 import '../models/user.dart';
 import '../services/api_client.dart';
@@ -135,7 +136,7 @@ class _AccountPageState extends State<AccountPage> {
                               radius: 44,
                               backgroundColor: colorScheme.primary,
                               backgroundImage:
-                                  _avatarUrl != null ? NetworkImage(_avatarUrl!) : null,
+                                  _avatarUrl != null ? NetworkImage(AppConfig.absoluteUrl(_avatarUrl!)) : null,
                               child: _avatarUrl == null
                                   ? Text(
                                       (_username ?? '?')[0].toUpperCase(),

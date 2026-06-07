@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import '../config/app_config.dart';
 import '../l10n/app_localizations.dart';
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
@@ -108,7 +109,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                       CircleAvatar(
                         radius: 48,
                         backgroundColor: colorScheme.primary,
-                        backgroundImage: _avatarUrl != null ? NetworkImage(_avatarUrl!) : null,
+                        backgroundImage: _avatarUrl != null ? NetworkImage(AppConfig.absoluteUrl(_avatarUrl!)) : null,
                         child: _avatarUrl == null
                             ? Icon(Icons.person, size: 48, color: colorScheme.onPrimary)
                             : null,
