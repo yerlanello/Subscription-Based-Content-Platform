@@ -95,24 +95,24 @@ func main() {
 	authSvc := service.NewAuthService(userRepo, jwtSecret, emailSvc, tokenRepo)
 	postSvc := service.NewPostService(postRepo, subRepo, notifRepo, userRepo, commentRepo, notifHub)
 
-	// Recommendation system — optional, degrades gracefully if unavailable
+	// Recommendation system — optional, only enabled if MILVUS_ADDR is explicitly set
 	var recSvc *recommendation.Service
-	milvusAddr := os.Getenv("MILVUS_ADDR")
-	embeddingURL := os.Getenv("EMBEDDING_URL")
-	if milvusAddr == "" {
-		milvusAddr = "localhost:19530"
-	}
-	if embeddingURL == "" {
-		embeddingURL = "http://localhost:8001"
-	}
-	milvusClient, err := recommendation.NewMilvusClient(ctx, milvusAddr, os.Getenv("MILVUS_API_KEY"))
-	if err != nil {
-		log.Printf("warn: milvus unavailable, recommendations disabled: %v", err)
+	if milvusAddr := os.Getenv("MILVUS_ADDR"); milvusAddr != "" {
+		embeddingURL := os.Getenv("EMBEDDING_URL")
+		if embeddingURL == "" {
+			embeddingURL = "http://localhost:8001"
+		}
+		milvusClient, err := recommendation.NewMilvusClient(ctx, milvusAddr, os.Getenv("MILVUS_API_KEY"))
+		if err != nil {
+			log.Printf("warn: milvus unavailable, recommendations disabled: %v", err)
+		} else {
+			embClient := recommendation.NewEmbeddingClient(embeddingURL)
+			recSvc = recommendation.NewService(milvusClient, embClient, postRepo, creatorRepo)
+			log.Printf("recommendation system ready")
+			defer milvusClient.Close()
+		}
 	} else {
-		embClient := recommendation.NewEmbeddingClient(embeddingURL)
-		recSvc = recommendation.NewService(milvusClient, embClient, postRepo, creatorRepo)
-		log.Printf("recommendation system ready")
-		defer milvusClient.Close()
+		log.Printf("info: recommendations disabled (MILVUS_ADDR not set)")
 	}
 
 	// Handlers
