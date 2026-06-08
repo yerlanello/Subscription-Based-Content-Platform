@@ -2,6 +2,13 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- Required by the WebRTC framework (pulled in by livekit_client) to build
+	     and pass App Store review, even though the app only views streams and
+	     never captures camera/microphone. -->
+	<key>NSCameraUsageDescription</key>
+	<string>This app does not record video; this permission is required by the streaming framework.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>This app does not record audio; this permission is required by the streaming framework.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>

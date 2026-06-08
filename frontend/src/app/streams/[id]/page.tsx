@@ -21,7 +21,12 @@ const StreamMap = dynamic(() => import("@/components/StreamMap"), { ssr: false }
 
 // Viewer-only video — no publishing controls
 function StreamViewer() {
-  const tracks = useTracks([Track.Source.Camera], { onlySubscribed: true });
+  // Subscribe to both camera and screen-share so viewers see whichever the
+  // streamer is publishing (the go-live page lets them toggle screen share).
+  const tracks = useTracks(
+    [Track.Source.Camera, Track.Source.ScreenShare],
+    { onlySubscribed: true },
+  );
   const [connecting, setConnecting] = useState(true);
 
   // After 8 seconds assume we're connected and streamer just has no video yet

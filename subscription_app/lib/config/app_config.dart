@@ -42,4 +42,20 @@ class AppConfig {
         : '';
     return '${baseUri.scheme}://${baseUri.host}$port$url';
   }
+
+  // Returns a reachable LiveKit websocket URL for the current platform.
+  // The backend hands back the server-side `livekit_url` (ws:// or wss://),
+  // which in dev points at "localhost" — unreachable from an Android emulator
+  // or a physical device. Rewrite loopback hosts to the same host the API uses
+  // (mirroring [absoluteUrl]), preserving the LiveKit port. Non-loopback hosts
+  // (real deployments) are returned untouched.
+  static String livekitUrl(String raw) {
+    final uri = Uri.tryParse(raw);
+    if (uri == null) return raw;
+    final isLoopback = uri.host == 'localhost' || uri.host == '127.0.0.1';
+    if (!isLoopback) return raw;
+    final baseUri = Uri.parse(baseUrl);
+    if (baseUri.host == uri.host) return raw;
+    return uri.replace(host: baseUri.host).toString();
+  }
 }

@@ -5,13 +5,16 @@ import '../config/categories.dart';
 import '../l10n/app_localizations.dart';
 import '../models/creator.dart';
 import '../models/post.dart';
+import '../models/stream.dart';
 import '../models/user.dart';
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
 import '../services/creators_service.dart';
 import '../services/posts_service.dart';
+import '../services/streams_service.dart';
 import '../widgets/post_card.dart';
 import 'payment_waiting_page.dart';
+import 'stream_view_page.dart';
 
 class CreatorProfilePage extends StatefulWidget {
   const CreatorProfilePage({super.key, required this.username});
@@ -24,6 +27,7 @@ class CreatorProfilePage extends StatefulWidget {
 class _CreatorProfilePageState extends State<CreatorProfilePage> {
   CreatorPage? _creator;
   User? _basicUser; // fallback when user is not a creator
+  LiveStream? _liveStream; // non-null when the creator is currently live
   List<Post> _posts = [];
   bool _loading = true;
   bool _loadingMorePosts = false;
@@ -67,7 +71,9 @@ class _CreatorProfilePageState extends State<CreatorProfilePage> {
       _postsOffset = 0;
       _hasMorePosts = true;
       _basicUser = null;
+      _liveStream = null;
     });
+    _loadLiveStream();
     try {
       _myUsername = await AuthService.getUsername();
       final creator = await CreatorsService.getCreatorPage(widget.username);
@@ -93,6 +99,15 @@ class _CreatorProfilePageState extends State<CreatorProfilePage> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  // Best-effort: check whether this creator is currently live. Runs in parallel
+  // with the profile load and silently does nothing if they're offline.
+  Future<void> _loadLiveStream() async {
+    try {
+      final s = await StreamsService.getByCreator(widget.username);
+      if (mounted) setState(() => _liveStream = s);
+    } catch (_) {/* offline or not a creator — no badge */}
   }
 
   Future<void> _loadMorePosts() async {
@@ -454,6 +469,20 @@ class _CreatorProfilePageState extends State<CreatorProfilePage> {
                   ],
                 ),
                 const SizedBox(height: 12),
+                if (_liveStream != null) ...[
+                  _LiveBanner(
+                    stream: _liveStream!,
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => StreamViewPage(
+                          streamId: _liveStream!.id,
+                          preloaded: _liveStream,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 if (!isOwnProfile) ...[
                   if (_subscribeError != null)
                     Padding(
@@ -802,6 +831,82 @@ class _CountChip extends StatelessWidget {
                 ?.copyWith(
                     color: Theme.of(context).colorScheme.outline)),
       ],
+    );
+  }
+}
+
+class _LiveBanner extends StatelessWidget {
+  const _LiveBanner({required this.stream, required this.onTap});
+  final LiveStream stream;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.red,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.white.withAlpha(60),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: const BoxDecoration(
+                          color: Colors.white, shape: BoxShape.circle),
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      L10n.t('live'),
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  stream.title.isNotEmpty ? stream.title : L10n.t('live_stream'),
+                  style: const TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.w600),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.play_circle_fill,
+                      color: Colors.white, size: 18),
+                  const SizedBox(width: 4),
+                  Text(
+                    L10n.t('watch'),
+                    style: const TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
