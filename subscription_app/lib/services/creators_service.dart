@@ -1,3 +1,4 @@
+import 'dart:io';
 import '../models/creator.dart';
 import '../models/post.dart';
 import 'api_client.dart';
@@ -116,6 +117,35 @@ class CreatorsService {
   /// Upgrade the current patron account to a creator account.
   static Future<void> becomeCreator(String displayName) async {
     await ApiClient.post('/creators', body: {'display_name': displayName});
+  }
+
+  /// Update the current creator's profile. Only non-null fields are sent.
+  static Future<CreatorProfile> updateProfile(
+    String username, {
+    String? displayName,
+    String? description,
+    String? category,
+    int? subscriptionPriceCents,
+    String? subscriptionDescription,
+  }) async {
+    _validateUsername(username);
+    final res = await ApiClient.put('/creators/$username', body: {
+      'display_name': ?displayName,
+      'description': ?description,
+      'category': ?category,
+      'subscription_price_cents': ?subscriptionPriceCents,
+      'subscription_description': ?subscriptionDescription,
+    });
+    return CreatorProfile.fromJson(res['data'] as Map<String, dynamic>);
+  }
+
+  /// Upload a new banner/cover image for the current creator.
+  /// Returns the updated profile (with the new cover_url).
+  static Future<CreatorProfile> uploadCover(String username, File file) async {
+    _validateUsername(username);
+    final res =
+        await ApiClient.postMultipart('/creators/$username/cover', file, 'cover');
+    return CreatorProfile.fromJson(res['data'] as Map<String, dynamic>);
   }
 
   /// Follow a creator.

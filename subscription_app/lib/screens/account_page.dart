@@ -1,10 +1,7 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import '../config/app_config.dart';
 import '../l10n/app_localizations.dart';
 import '../models/user.dart';
-import '../services/api_client.dart';
 import '../services/auth_service.dart';
 import '../widgets/become_creator_dialog.dart';
 import 'edit_profile_page.dart';
@@ -23,12 +20,10 @@ class _AccountPageState extends State<AccountPage> {
   String? _username;
   String? _email;
   String? _avatarUrl;
-  String? _bio;
   UserRole _role = UserRole.patron;
   int _subscriptionsCount = 0;
   int _followingCount = 0;
   bool _loading = true;
-  bool _uploadingAvatar = false;
 
   @override
   void initState() {
@@ -61,7 +56,6 @@ class _AccountPageState extends State<AccountPage> {
           _subscriptionsCount = stats.subscriptionsCount;
           _followingCount = stats.followingCount;
           _avatarUrl = stats.avatarUrl;
-          _bio = stats.bio;
         });
       }
     } catch (_) {
@@ -81,25 +75,6 @@ class _AccountPageState extends State<AccountPage> {
   }
 
   bool get _isCreator => _role == UserRole.creator || _role == UserRole.both;
-
-  Future<void> _pickAvatar() async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
-    if (picked == null) return;
-    setState(() => _uploadingAvatar = true);
-    try {
-      final res = await ApiClient.postMultipart('/users/me/avatar', File(picked.path), 'avatar');
-      final url = (res['data'] as Map<String, dynamic>?)?['avatar_url'] as String?;
-      await AuthService.saveAvatarUrl(url);
-      if (mounted) setState(() => _avatarUrl = url);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
-      }
-    } finally {
-      if (mounted) setState(() => _uploadingAvatar = false);
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -130,32 +105,20 @@ class _AccountPageState extends State<AccountPage> {
                     padding: const EdgeInsets.symmetric(vertical: 32),
                     child: Column(
                       children: [
-                        Stack(
-                          children: [
-                            CircleAvatar(
-                              radius: 44,
-                              backgroundColor: colorScheme.primary,
-                              backgroundImage:
-                                  _avatarUrl != null ? NetworkImage(AppConfig.absoluteUrl(_avatarUrl!)) : null,
-                              child: _avatarUrl == null
-                                  ? Text(
-                                      (_username ?? '?')[0].toUpperCase(),
-                                      style: TextStyle(
-                                          fontSize: 36,
-                                          fontWeight: FontWeight.bold,
-                                          color: colorScheme.onPrimary),
-                                    )
-                                  : null,
-                            ),
-                            if (_uploadingAvatar)
-                              const Positioned.fill(
-                                child: CircleAvatar(
-                                  radius: 44,
-                                  backgroundColor: Colors.black38,
-                                  child: CircularProgressIndicator(color: Colors.white),
-                                ),
-                              ),
-                          ],
+                        CircleAvatar(
+                          radius: 44,
+                          backgroundColor: colorScheme.primary,
+                          backgroundImage:
+                              _avatarUrl != null ? NetworkImage(AppConfig.absoluteUrl(_avatarUrl!)) : null,
+                          child: _avatarUrl == null
+                              ? Text(
+                                  (_username ?? '?')[0].toUpperCase(),
+                                  style: TextStyle(
+                                      fontSize: 36,
+                                      fontWeight: FontWeight.bold,
+                                      color: colorScheme.onPrimary),
+                                )
+                              : null,
                         ),
                         const SizedBox(height: 12),
                         Text(
@@ -172,19 +135,6 @@ class _AccountPageState extends State<AccountPage> {
                                 color: colorScheme.onPrimaryContainer.withAlpha(180),
                               ),
                         ),
-                        if (_bio != null && _bio!.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 24),
-                            child: Text(
-                              _bio!,
-                              textAlign: TextAlign.center,
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: colorScheme.onPrimaryContainer.withAlpha(200),
-                                  ),
-                            ),
-                          ),
-                        ],
                       ],
                     ),
                   ),
@@ -266,19 +216,6 @@ class _AccountPageState extends State<AccountPage> {
                             );
                             if (changed == true) _load();
                           },
-                        ),
-                        const Divider(height: 1, indent: 56),
-                        ListTile(
-                          leading: const Icon(Icons.photo_camera_outlined),
-                          title: Text(L10n.t('change_avatar')),
-                          trailing: _uploadingAvatar
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              : const Icon(Icons.chevron_right),
-                          onTap: _uploadingAvatar ? null : _pickAvatar,
                         ),
                         if (!_isCreator) ...[
                           const Divider(height: 1, indent: 56),

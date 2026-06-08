@@ -92,8 +92,11 @@ class MyApp extends StatelessWidget {
             '/edit-profile': (context) => const EditProfilePage(),
             '/notifications': (context) => const NotificationsPage(),
           },
+          // Fall back to the AuthGate (which re-checks the stored token and
+          // routes to /home or /login) rather than forcing the login page —
+          // an unexpected route should never log an authenticated user out.
           onUnknownRoute: (settings) => MaterialPageRoute(
-            builder: (_) => const LoginPage(),
+            builder: (_) => const AuthGate(),
           ),
         );
       },

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../config/app_config.dart';
+import '../config/categories.dart';
 import '../l10n/app_localizations.dart';
 import '../models/creator.dart';
 import '../models/post.dart';
@@ -367,13 +368,23 @@ class _CreatorProfilePageState extends State<CreatorProfilePage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Cover
+        // Cover / banner
         Container(
-          height: 120,
+          height: 140,
+          width: double.infinity,
           color: colorScheme.primaryContainer,
-          child: profile.coverUrl != null
-              ? Image.network(AppConfig.absoluteUrl(profile.coverUrl!),
-                  fit: BoxFit.cover, width: double.infinity)
+          child: (profile.coverUrl != null &&
+                  (profile.coverUrl as String).isNotEmpty)
+              ? Image.network(
+                  AppConfig.absoluteUrl(profile.coverUrl!),
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  height: 140,
+                  loadingBuilder: (context, child, progress) =>
+                      progress == null ? child : const SizedBox.shrink(),
+                  errorBuilder: (context, error, stack) =>
+                      const SizedBox.shrink(),
+                )
               : null,
         ),
         Padding(
@@ -410,20 +421,22 @@ class _CreatorProfilePageState extends State<CreatorProfilePage> {
                         .textTheme
                         .bodyMedium
                         ?.copyWith(color: colorScheme.outline)),
-                if (profile.category != null) ...[
+                if (profile.category != null &&
+                    (profile.category as String).isNotEmpty) ...[
                   const SizedBox(height: 6),
                   Chip(
-                    label: Text(profile.category!,
+                    label: Text(Categories.label(profile.category!),
                         style: const TextStyle(fontSize: 12)),
                     padding: EdgeInsets.zero,
                     visualDensity: VisualDensity.compact,
                   ),
                 ],
-                // Bio / description
-                if (creator.user.bio != null &&
-                    creator.user.bio!.isNotEmpty) ...[
+                // Bio / description — sourced from the creator profile
+                // (the dashboard "About me"), matching the web frontend.
+                if (profile.description != null &&
+                    (profile.description as String).isNotEmpty) ...[
                   const SizedBox(height: 10),
-                  _BioSection(bio: creator.user.bio!),
+                  _BioSection(bio: profile.description!),
                 ],
                 const SizedBox(height: 12),
                 // Subscriber / follower counts

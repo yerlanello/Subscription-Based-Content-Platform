@@ -5,7 +5,7 @@ import '../services/app_settings_service.dart';
 import '../services/auth_service.dart';
 import 'feed_page.dart';
 import 'home_page.dart';
-import 'drafts_page.dart';
+import 'creator_dashboard_page.dart';
 import 'account_page.dart';
 import 'settings_page.dart';
 import 'new_post_page.dart';
@@ -77,7 +77,7 @@ class _MainShellState extends State<MainShell> {
       ? [
           const FeedPage(),
           const HomePage(),
-          const DraftsPage(),
+          const CreatorDashboardPage(),
           const AccountPage(),
           const SettingsPage(),
         ]
@@ -102,9 +102,9 @@ class _MainShellState extends State<MainShell> {
           label: L10n.t('authors'),
         ),
         NavigationDestination(
-          icon: const Icon(Icons.article_outlined),
-          selectedIcon: const Icon(Icons.article),
-          label: L10n.t('posts'),
+          icon: const Icon(Icons.dashboard_outlined),
+          selectedIcon: const Icon(Icons.dashboard),
+          label: L10n.t('dashboard'),
         ),
         NavigationDestination(
           icon: const Icon(Icons.person_outline),

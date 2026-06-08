@@ -6,6 +6,9 @@ import '../l10n/app_localizations.dart';
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
 
+/// Lets the user change their profile picture (avatar).
+/// The creator bio/description lives in the Creator Dashboard settings, so it
+/// is intentionally not edited here.
 class EditProfilePage extends StatefulWidget {
   const EditProfilePage({super.key});
 
@@ -14,10 +17,9 @@ class EditProfilePage extends StatefulWidget {
 }
 
 class _EditProfilePageState extends State<EditProfilePage> {
-  final _bioController = TextEditingController();
   bool _loading = true;
-  bool _saving = false;
   bool _uploadingAvatar = false;
+  bool _changed = false;
   String? _avatarUrl;
   String? _error;
 
@@ -27,41 +29,17 @@ class _EditProfilePageState extends State<EditProfilePage> {
     _load();
   }
 
-  @override
-  void dispose() {
-    _bioController.dispose();
-    super.dispose();
-  }
-
   Future<void> _load() async {
     try {
       final stats = await AuthService.getMe();
       if (mounted) {
         setState(() {
-          _bioController.text = stats.bio ?? '';
           _avatarUrl = stats.avatarUrl;
           _loading = false;
         });
       }
     } catch (e) {
       if (mounted) setState(() { _error = e.toString(); _loading = false; });
-    }
-  }
-
-  Future<void> _save() async {
-    setState(() { _saving = true; _error = null; });
-    try {
-      await AuthService.updateProfile(bio: _bioController.text.trim());
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(L10n.t('post_saved'))),
-        );
-        Navigator.of(context).pop(true);
-      }
-    } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
-    } finally {
-      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -74,7 +52,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
       final res = await ApiClient.postMultipart('/users/me/avatar', File(picked.path), 'avatar');
       final url = (res['data'] as Map<String, dynamic>?)?['avatar_url'] as String?;
       await AuthService.saveAvatarUrl(url);
-      if (mounted) setState(() => _avatarUrl = url);
+      if (mounted) setState(() { _avatarUrl = url; _changed = true; });
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     } finally {
@@ -91,10 +69,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
         title: Text(L10n.t('edit_profile')),
         actions: [
           TextButton(
-            onPressed: _saving ? null : _save,
-            child: _saving
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                : Text(L10n.t('save')),
+            onPressed: () => Navigator.of(context).pop(_changed),
+            child: Text(L10n.t('save')),
           ),
         ],
       ),
@@ -103,15 +79,18 @@ class _EditProfilePageState extends State<EditProfilePage> {
           : ListView(
               padding: const EdgeInsets.all(24),
               children: [
+                const SizedBox(height: 16),
                 Center(
                   child: Stack(
                     children: [
                       CircleAvatar(
-                        radius: 48,
+                        radius: 56,
                         backgroundColor: colorScheme.primary,
-                        backgroundImage: _avatarUrl != null ? NetworkImage(AppConfig.absoluteUrl(_avatarUrl!)) : null,
+                        backgroundImage: _avatarUrl != null
+                            ? NetworkImage(AppConfig.absoluteUrl(_avatarUrl!))
+                            : null,
                         child: _avatarUrl == null
-                            ? Icon(Icons.person, size: 48, color: colorScheme.onPrimary)
+                            ? Icon(Icons.person, size: 56, color: colorScheme.onPrimary)
                             : null,
                       ),
                       Positioned(
@@ -119,14 +98,14 @@ class _EditProfilePageState extends State<EditProfilePage> {
                         bottom: 0,
                         child: _uploadingAvatar
                             ? const CircleAvatar(
-                                radius: 16,
-                                child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                                radius: 18,
+                                child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
                               )
                             : CircleAvatar(
-                                radius: 16,
+                                radius: 18,
                                 backgroundColor: colorScheme.primaryContainer,
                                 child: IconButton(
-                                  iconSize: 16,
+                                  iconSize: 18,
                                   padding: EdgeInsets.zero,
                                   icon: const Icon(Icons.camera_alt),
                                   onPressed: _pickAvatar,
@@ -136,20 +115,16 @@ class _EditProfilePageState extends State<EditProfilePage> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 32),
-                TextField(
-                  controller: _bioController,
-                  maxLines: 5,
-                  minLines: 3,
-                  textCapitalization: TextCapitalization.sentences,
-                  decoration: InputDecoration(
-                    labelText: L10n.t('bio'),
-                    border: const OutlineInputBorder(),
-                    alignLabelWithHint: true,
+                const SizedBox(height: 20),
+                Center(
+                  child: TextButton.icon(
+                    icon: const Icon(Icons.photo_camera_outlined, size: 18),
+                    label: Text(L10n.t('change_avatar')),
+                    onPressed: _uploadingAvatar ? null : _pickAvatar,
                   ),
                 ),
                 if (_error != null) ...[
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -159,11 +134,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
                     child: Text(_error!, style: TextStyle(color: colorScheme.onErrorContainer)),
                   ),
                 ],
-                const SizedBox(height: 24),
-                FilledButton(
-                  onPressed: _saving ? null : _save,
-                  child: Text(L10n.t('save')),
-                ),
               ],
             ),
     );

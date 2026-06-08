@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import '../config/app_config.dart';
+import '../config/categories.dart';
 import '../l10n/app_localizations.dart';
 import '../models/creator.dart';
 import '../services/app_settings_service.dart';
 import '../services/creators_service.dart';
 import 'creator_profile_page.dart';
 
-const _categories = ['All', 'Music', 'Art', 'Podcasts', 'Gaming', 'Education', 'Other'];
 const _limit = 50;
 
 class HomePage extends StatefulWidget {
@@ -154,14 +154,17 @@ class _HomePageState extends State<HomePage> {
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              itemCount: _categories.length,
+              // Index 0 is the "All" chip; the rest are the canonical
+              // categories, displayed with localized labels.
+              itemCount: Categories.values.length + 1,
               separatorBuilder: (context, i) => const SizedBox(width: 8),
               itemBuilder: (context, i) {
-                final cat = _categories[i];
+                final value = i == 0 ? 'All' : Categories.values[i - 1];
+                final label = i == 0 ? L10n.t('filter_all') : Categories.label(value);
                 return FilterChip(
-                  label: Text(cat),
-                  selected: cat == _selectedCategory,
-                  onSelected: (_) => setState(() => _selectedCategory = cat),
+                  label: Text(label),
+                  selected: value == _selectedCategory,
+                  onSelected: (_) => setState(() => _selectedCategory = value),
                 );
               },
             ),
@@ -289,10 +292,10 @@ class _CreatorCard extends StatelessWidget {
                           .textTheme
                           .bodySmall
                           ?.copyWith(color: colorScheme.outline)),
-                  if (profile.category != null) ...[
+                  if (profile.category != null && profile.category!.isNotEmpty) ...[
                     const SizedBox(height: 6),
                     Chip(
-                      label: Text(profile.category!, style: const TextStyle(fontSize: 11)),
+                      label: Text(Categories.label(profile.category!), style: const TextStyle(fontSize: 11)),
                       padding: EdgeInsets.zero,
                       visualDensity: VisualDensity.compact,
                     ),

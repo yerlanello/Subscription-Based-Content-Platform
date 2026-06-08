@@ -27,6 +27,15 @@
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"
               />
+            <!-- Deep links (xabarlaapp://payment) are handled manually via the
+                 app_links package in PaymentWaitingPage. Disable Flutter's
+                 automatic deep-link routing so the incoming URI isn't turned
+                 into a (non-existent) route, which would fall through to
+                 onUnknownRoute and show the login page on return from Stripe. -->
+            <meta-data
+              android:name="flutter_deeplinking_enabled"
+              android:value="false"
+              />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
