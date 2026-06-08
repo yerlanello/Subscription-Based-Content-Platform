@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 
 	"diploma/backend/internal/middleware"
@@ -151,7 +152,8 @@ func (h *AuthHandler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) ResendVerification(w http.ResponseWriter, r *http.Request) {
 	claims := middleware.GetClaims(r)
 	if err := h.authSvc.SendVerificationEmail(r.Context(), claims.UserID); err != nil {
-		response.Error(w, http.StatusInternalServerError, "internal error")
+		log.Printf("ERROR resend verification for %s: %v", claims.UserID, err)
+		response.Error(w, http.StatusInternalServerError, "Не удалось отправить письмо. Проверьте настройки почты.")
 		return
 	}
 	response.OK(w, map[string]string{"message": "verification email sent"})

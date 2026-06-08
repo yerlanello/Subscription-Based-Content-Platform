@@ -30,6 +30,9 @@ export const ru = {
   },
   following: {
     title: "Мои подписки",
+    paidSection: "Платные подписки",
+    followSection: "Слежу за авторами",
+    emptyPaid: "У вас нет платных подписок",
     empty: "Вы ещё не следите ни за одним автором",
     findAuthors: "Найти авторов",
   },

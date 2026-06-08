@@ -24,7 +24,10 @@ import (
 )
 
 func main() {
-	_ = godotenv.Load()
+	// .env is optional — in production env vars are injected by the container
+	if err := godotenv.Load(); err != nil {
+		log.Printf("info: no .env file found, using environment variables")
+	}
 
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
@@ -46,24 +49,24 @@ func main() {
 	}
 	defer pool.Close()
 
-	// Run migrations
 	if err := repository.RunMigrations(ctx, pool); err != nil {
 		log.Fatalf("migrations: %v", err)
 	}
 
-	// Storage (MinIO)
-	minioEndpoint := os.Getenv("MINIO_ENDPOINT")
-	minioAccess := os.Getenv("MINIO_ACCESS_KEY")
-	minioSecret := os.Getenv("MINIO_SECRET_KEY")
-	minioBucket := os.Getenv("MINIO_BUCKET")
-	minioPublicURL := os.Getenv("MINIO_PUBLIC_URL")
-	if minioBucket == "" {
-		minioBucket = "media"
-	}
+	// Storage (MinIO) — optional, degrades gracefully
 	var minioStorage *storage.MinioStorage
-	if minioEndpoint != "" {
-		var err error
-		minioStorage, err = storage.NewMinioStorage(minioEndpoint, minioAccess, minioSecret, minioBucket, minioPublicURL)
+	if minioEndpoint := os.Getenv("MINIO_ENDPOINT"); minioEndpoint != "" {
+		bucket := os.Getenv("MINIO_BUCKET")
+		if bucket == "" {
+			bucket = "media"
+		}
+		minioStorage, err = storage.NewMinioStorage(
+			minioEndpoint,
+			os.Getenv("MINIO_ACCESS_KEY"),
+			os.Getenv("MINIO_SECRET_KEY"),
+			bucket,
+			os.Getenv("MINIO_PUBLIC_URL"),
+		)
 		if err != nil {
 			log.Printf("warn: minio init failed: %v", err)
 		}
@@ -79,39 +82,37 @@ func main() {
 	notifRepo := repository.NewNotificationRepo(pool)
 	donationRepo := repository.NewDonationRepo(pool)
 	tokenRepo := repository.NewTokenRepo(pool)
+	sRepo := repository.NewStreamRepo(pool)
 
-	// Hub
 	notifHub := hub.New()
 
-	// Email service
 	emailSvc := email.NewService(
 		os.Getenv("SMTP_HOST"), os.Getenv("SMTP_PORT"),
 		os.Getenv("SMTP_USER"), os.Getenv("SMTP_PASS"),
 		os.Getenv("SMTP_FROM"), os.Getenv("APP_URL"),
 	)
 
-	// Services
 	authSvc := service.NewAuthService(userRepo, jwtSecret, emailSvc, tokenRepo)
 	postSvc := service.NewPostService(postRepo, subRepo, notifRepo, userRepo, commentRepo, notifHub)
 
-	// Recommendation system (optional — degrades gracefully if unavailable)
+	// Recommendation system — optional, only enabled if MILVUS_ADDR is explicitly set
 	var recSvc *recommendation.Service
-	milvusAddr := os.Getenv("MILVUS_ADDR")
-	embeddingURL := os.Getenv("EMBEDDING_URL")
-	if milvusAddr == "" {
-		milvusAddr = "localhost:19530"
-	}
-	if embeddingURL == "" {
-		embeddingURL = "http://localhost:8001"
-	}
-	milvusClient, err := recommendation.NewMilvusClient(ctx, milvusAddr, os.Getenv("MILVUS_API_KEY"))
-	if err != nil {
-		log.Printf("warn: milvus unavailable, recommendations disabled: %v", err)
+	if milvusAddr := os.Getenv("MILVUS_ADDR"); milvusAddr != "" {
+		embeddingURL := os.Getenv("EMBEDDING_URL")
+		if embeddingURL == "" {
+			embeddingURL = "http://localhost:8001"
+		}
+		milvusClient, err := recommendation.NewMilvusClient(ctx, milvusAddr, os.Getenv("MILVUS_API_KEY"))
+		if err != nil {
+			log.Printf("warn: milvus unavailable, recommendations disabled: %v", err)
+		} else {
+			embClient := recommendation.NewEmbeddingClient(embeddingURL)
+			recSvc = recommendation.NewService(milvusClient, embClient, postRepo, creatorRepo)
+			log.Printf("recommendation system ready")
+			defer milvusClient.Close()
+		}
 	} else {
-		embClient := recommendation.NewEmbeddingClient(embeddingURL)
-		recSvc = recommendation.NewService(milvusClient, embClient, postRepo, creatorRepo)
-		log.Printf("recommendation system ready")
-		defer milvusClient.Close()
+		log.Printf("info: recommendations disabled (MILVUS_ADDR not set)")
 	}
 
 	// Handlers
@@ -122,17 +123,30 @@ func main() {
 	notifH := handlers.NewNotificationHandler(notifRepo, notifHub)
 	stripeH := handlers.NewStripeHandler(subRepo, creatorRepo, userRepo, donationRepo)
 	billingH := handlers.NewBillingHandler(subRepo, donationRepo)
-	sRepo := repository.NewStreamRepo(pool)
 	streamH := handlers.NewStreamHandler(sRepo, notifRepo, notifHub)
+
+	// Rate limiters
+	// General API: 60 req/s per IP, burst 120
+	generalRL := middleware.NewRateLimiter(60, 120)
+	// Auth endpoints: 5 attempts per minute per IP (1 token per 12s, burst 5)
+	// After 5 quick attempts, must wait 12s between each next attempt
+	authRL := middleware.NewRateLimiter(1.0/12, 5)
 
 	// Router
 	r := chi.NewRouter()
 	r.Use(chimiddleware.Logger)
 	r.Use(chimiddleware.Recoverer)
 	r.Use(chimiddleware.RequestID)
+	r.Use(chimiddleware.RealIP)
+	r.Use(generalRL.Handler)
+
 	allowedOrigins := []string{"http://localhost:3000", "http://localhost:3001"}
 	if frontendURL := os.Getenv("FRONTEND_URL"); frontendURL != "" {
 		allowedOrigins = append(allowedOrigins, frontendURL)
+		// also allow www. variant
+		if len(frontendURL) > 8 && frontendURL[:8] == "https://" {
+			allowedOrigins = append(allowedOrigins, "https://www."+frontendURL[8:])
+		}
 	}
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   allowedOrigins,
@@ -145,8 +159,9 @@ func main() {
 	optionalAuth := middleware.OptionalAuth(jwtSecret)
 
 	r.Route("/api", func(r chi.Router) {
-		// Auth
+		// Auth — stricter rate limit
 		r.Route("/auth", func(r chi.Router) {
+			r.Use(authRL.Handler)
 			r.Post("/register", authH.Register)
 			r.Post("/login", authH.Login)
 			r.Post("/refresh", authH.Refresh)
@@ -187,11 +202,8 @@ func main() {
 			r.With(authMiddleware).Post("/{username}/cover", creatorH.UploadCover)
 		})
 
-		// Stripe webhook (no auth — Stripe подписывает запрос своей подписью)
 		r.Post("/webhooks/stripe", stripeH.Webhook)
-		// Verify stripe session and create subscription
 		r.With(authMiddleware).Post("/subscriptions/verify-session", stripeH.VerifySession)
-		// Donations
 		r.With(authMiddleware).Post("/creators/{username}/donate", stripeH.CreateDonationCheckout)
 		r.With(authMiddleware).Post("/donations/verify", stripeH.VerifyDonation)
 
@@ -247,11 +259,14 @@ func main() {
 	})
 
 	// Clean up stale streams on startup, then every 10 minutes
-	sRepo.EndStale(ctx)
+	if err := sRepo.EndStale(ctx); err != nil {
+		log.Printf("warn: stale stream cleanup failed: %v", err)
+	}
 	go func() {
-		for {
-			time.Sleep(10 * time.Minute)
-			sRepo.EndStale(context.Background())
+		for range time.Tick(10 * time.Minute) {
+			if err := sRepo.EndStale(context.Background()); err != nil {
+				log.Printf("warn: stale stream cleanup failed: %v", err)
+			}
 		}
 	}()
 

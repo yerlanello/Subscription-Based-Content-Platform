@@ -32,6 +32,11 @@ const processQueue = (error: unknown, token: string | null = null) => {
 };
 
 // Автоматически обновляем токен при 401
+// Auth endpoints where 401 is an expected response (wrong credentials),
+// NOT a signal to refresh the token.
+const AUTH_ENDPOINTS = ["/auth/login", "/auth/register", "/auth/refresh",
+  "/auth/forgot-password", "/auth/reset-password", "/auth/verify-email"];
+
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
@@ -39,6 +44,26 @@ api.interceptors.response.use(
       _retry?: boolean;
     };
 
+    const url = originalRequest?.url ?? "";
+
+    // 429 — rate limit hit
+    if (error.response?.status === 429) {
+      return Promise.reject(
+        Object.assign(error, {
+          response: {
+            ...error.response,
+            data: { error: "Слишком много попыток. Подождите немного и попробуйте снова." },
+          },
+        })
+      );
+    }
+
+    // 401 on auth endpoints — just pass through (wrong password, etc.)
+    if (error.response?.status === 401 && AUTH_ENDPOINTS.some((p) => url.includes(p))) {
+      return Promise.reject(error);
+    }
+
+    // 401 on other endpoints — try to refresh the token
     if (error.response?.status === 401 && !originalRequest._retry) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {

@@ -106,19 +106,21 @@ func (r *StreamRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.Stream,
 	return s, err
 }
 
-func (r *StreamRepo) EndAllByCreator(ctx context.Context, creatorID uuid.UUID) {
-	r.db.Exec(ctx, `
+func (r *StreamRepo) EndAllByCreator(ctx context.Context, creatorID uuid.UUID) error {
+	_, err := r.db.Exec(ctx, `
 		UPDATE streams SET status = 'ended', ended_at = NOW()
 		WHERE creator_id = $1 AND status = 'live'
 	`, creatorID)
+	return err
 }
 
-// EndStale ends streams that have been live for more than maxAge without activity.
-func (r *StreamRepo) EndStale(ctx context.Context) {
-	r.db.Exec(ctx, `
+// EndStale ends streams that have been live for more than 4 hours.
+func (r *StreamRepo) EndStale(ctx context.Context) error {
+	_, err := r.db.Exec(ctx, `
 		UPDATE streams SET status = 'ended', ended_at = NOW()
 		WHERE status = 'live' AND started_at < NOW() - INTERVAL '4 hours'
 	`)
+	return err
 }
 
 func (r *StreamRepo) GetActiveByUsername(ctx context.Context, username string) (*models.Stream, error) {

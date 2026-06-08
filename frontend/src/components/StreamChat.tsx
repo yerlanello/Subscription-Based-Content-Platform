@@ -23,18 +23,14 @@ export function StreamChat({ streamId }: Props) {
   const { chatMessages, send } = useChat();
   const [text, setText] = useState("");
   const [history, setHistory] = useState<DbMessage[]>([]);
-  // Track which message texts we already have from DB history to avoid duplicates
-  const sentIds = useRef<Set<string>>(new Set());
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Load message history from DB on mount
+  // Load message history from DB on mount (messages sent before joining)
   useEffect(() => {
     if (!streamId) return;
-    streamsApi.getMessages(streamId).then((res) => {
-      const msgs: DbMessage[] = res.data.data ?? [];
-      setHistory(msgs);
-      msgs.forEach((m) => sentIds.current.add(m.id));
-    }).catch(() => {});
+    streamsApi.getMessages(streamId)
+      .then((res) => setHistory(res.data.data ?? []))
+      .catch(() => {});
   }, [streamId]);
 
   // Scroll to bottom when messages change
@@ -47,16 +43,12 @@ export function StreamChat({ streamId }: Props) {
     if (!msg || !user) return;
     setText("");
 
-    // Send via LiveKit (real-time to all current participants)
+    // Send via LiveKit — shows immediately in chatMessages for everyone
     try { await send(msg); } catch { /* ignore */ }
 
-    // Save to DB (persistent history for new joiners)
-    try {
-      const res = await streamsApi.sendMessage(streamId, msg, user.username);
-      const saved: DbMessage = res.data.data;
-      sentIds.current.add(saved.id);
-      setHistory((prev) => [...prev, saved]);
-    } catch { /* ignore */ }
+    // Persist to DB for new joiners loading history — do NOT add to local history
+    // to avoid duplication with the LiveKit chatMessages entry
+    streamsApi.sendMessage(streamId, msg, user.username).catch(() => {});
   }, [text, user, streamId, send]);
 
   // LiveKit does NOT echo messages back to the sender, so chatMessages

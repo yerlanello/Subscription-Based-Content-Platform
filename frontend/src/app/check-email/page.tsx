@@ -10,12 +10,17 @@ export default function CheckEmailPage() {
   const { user } = useAuth();
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleResend = async () => {
     setLoading(true);
+    setError("");
     try {
       await authApi.resendVerification();
       setSent(true);
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { error?: string } } };
+      setError(e.response?.data?.error ?? "Не удалось отправить письмо. Попробуйте позже.");
     } finally {
       setLoading(false);
     }
@@ -42,16 +47,21 @@ export default function CheckEmailPage() {
 
         {sent ? (
           <div className="rounded-lg bg-green-50 dark:bg-green-900/20 px-4 py-3 text-sm text-green-700 dark:text-green-300">
-            Письмо отправлено повторно!
+            Письмо отправлено повторно! Проверьте папку «Спам» если не видите.
           </div>
         ) : (
-          <button
-            onClick={handleResend}
-            disabled={loading}
-            className="btn-outline w-full"
-          >
-            {loading ? "Отправляем…" : "Отправить повторно"}
-          </button>
+          <>
+            <button
+              onClick={handleResend}
+              disabled={loading}
+              className="btn-outline w-full"
+            >
+              {loading ? "Отправляем…" : "Отправить повторно"}
+            </button>
+            {error && (
+              <p className="mt-3 text-sm text-red-500">{error}</p>
+            )}
+          </>
         )}
 
         <p className="mt-6 text-sm text-gray-400">
