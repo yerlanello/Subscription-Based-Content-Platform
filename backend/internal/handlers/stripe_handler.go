@@ -1,13 +1,16 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"strconv"
 
+	"diploma/backend/internal/hub"
 	"diploma/backend/internal/middleware"
 	"diploma/backend/internal/repository"
 	"diploma/backend/internal/response"
@@ -24,11 +27,13 @@ type StripeHandler struct {
 	creatorRepo  *repository.CreatorRepo
 	userRepo     *repository.UserRepo
 	donationRepo *repository.DonationRepo
+	notifRepo    *repository.NotificationRepo
+	notifHub     *hub.Hub
 }
 
-func NewStripeHandler(subRepo *repository.SubscriptionRepo, creatorRepo *repository.CreatorRepo, userRepo *repository.UserRepo, donationRepo *repository.DonationRepo) *StripeHandler {
+func NewStripeHandler(subRepo *repository.SubscriptionRepo, creatorRepo *repository.CreatorRepo, userRepo *repository.UserRepo, donationRepo *repository.DonationRepo, notifRepo *repository.NotificationRepo, notifHub *hub.Hub) *StripeHandler {
 	stripe.Key = os.Getenv("STRIPE_SECRET_KEY")
-	return &StripeHandler{subRepo: subRepo, creatorRepo: creatorRepo, userRepo: userRepo, donationRepo: donationRepo}
+	return &StripeHandler{subRepo: subRepo, creatorRepo: creatorRepo, userRepo: userRepo, donationRepo: donationRepo, notifRepo: notifRepo, notifHub: notifHub}
 }
 
 // CreateCheckout — POST /api/creators/{username}/checkout
@@ -149,6 +154,7 @@ func (h *StripeHandler) VerifySession(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusInternalServerError, "failed to create subscription")
 		return
 	}
+	go h.notifyNewSubscriber(patronID, creatorID)
 
 	response.OK(w, map[string]string{"status": "subscribed"})
 }
@@ -298,6 +304,7 @@ func (h *StripeHandler) VerifyDonation(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusInternalServerError, "failed to record donation")
 		return
 	}
+	go h.notifyDonationReceived(donorID, creatorID, amountCents)
 
 	response.OK(w, map[string]string{"status": "ok"})
 }
@@ -498,6 +505,7 @@ func (h *StripeHandler) Webhook(w http.ResponseWriter, r *http.Request) {
 				log.Printf("stripe: failed to create donation: %v", err)
 			} else {
 				log.Printf("stripe: donation recorded donor=%s creator=%s amount=%d", donorID, creatorID, amountCents)
+				go h.notifyDonationReceived(donorID, creatorID, amountCents)
 			}
 		} else {
 			patronID, err1 := uuid.Parse(sess.Metadata["patron_id"])
@@ -512,9 +520,43 @@ func (h *StripeHandler) Webhook(w http.ResponseWriter, r *http.Request) {
 				log.Printf("stripe: failed to create subscription: %v", err)
 			} else {
 				log.Printf("stripe: subscription created patron=%s creator=%s", patronID, creatorID)
+				go h.notifyNewSubscriber(patronID, creatorID)
 			}
 		}
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+func (h *StripeHandler) notifyNewSubscriber(patronID, creatorID uuid.UUID) {
+	ctx := context.Background()
+	patron, err := h.userRepo.GetByID(ctx, patronID)
+	if err != nil {
+		return
+	}
+	title := fmt.Sprintf("%s оформил платную подписку на вас", patron.Username)
+	link := fmt.Sprintf("/%s", patron.Username)
+	event := hub.Event{Type: "new_subscriber", Title: title, Link: link}
+	h.notifHub.Send(creatorID, event)
+	n, err := h.notifRepo.Create(ctx, creatorID, "new_subscriber", title, nil, &link)
+	if err == nil {
+		event.ID = n.ID.String()
+	}
+}
+
+func (h *StripeHandler) notifyDonationReceived(donorID, creatorID uuid.UUID, amountCents int) {
+	ctx := context.Background()
+	donor, err := h.userRepo.GetByID(ctx, donorID)
+	if err != nil {
+		return
+	}
+	title := fmt.Sprintf("%s отправил вам донат %d ₸", donor.Username, amountCents)
+	link := fmt.Sprintf("/%s", donor.Username)
+	body := fmt.Sprintf("%d ₸", amountCents)
+	event := hub.Event{Type: "donation_received", Title: title, Body: body, Link: link}
+	h.notifHub.Send(creatorID, event)
+	n, err := h.notifRepo.Create(ctx, creatorID, "donation_received", title, &body, &link)
+	if err == nil {
+		event.ID = n.ID.String()
+	}
 }

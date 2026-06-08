@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"diploma/backend/internal/hub"
 	"diploma/backend/internal/middleware"
 	"diploma/backend/internal/models"
 	"diploma/backend/internal/repository"
@@ -23,6 +25,8 @@ type CreatorHandler struct {
 	userRepo    *repository.UserRepo
 	subRepo     *repository.SubscriptionRepo
 	followRepo  *repository.FollowRepo
+	notifRepo   *repository.NotificationRepo
+	notifHub    *hub.Hub
 	storage     *storage.MinioStorage
 }
 
@@ -31,9 +35,11 @@ func NewCreatorHandler(
 	userRepo *repository.UserRepo,
 	subRepo *repository.SubscriptionRepo,
 	followRepo *repository.FollowRepo,
+	notifRepo *repository.NotificationRepo,
+	notifHub *hub.Hub,
 	stor *storage.MinioStorage,
 ) *CreatorHandler {
-	return &CreatorHandler{creatorRepo: creatorRepo, userRepo: userRepo, subRepo: subRepo, followRepo: followRepo, storage: stor}
+	return &CreatorHandler{creatorRepo: creatorRepo, userRepo: userRepo, subRepo: subRepo, followRepo: followRepo, notifRepo: notifRepo, notifHub: notifHub, storage: stor}
 }
 
 // BecomeCreator — создать профиль автора
@@ -173,6 +179,7 @@ func (h *CreatorHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	go h.notifySubscribed(claims.UserID, creatorUser.ID)
 	response.Created(w, sub)
 }
 
@@ -208,6 +215,7 @@ func (h *CreatorHandler) Follow(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	go h.notifyFollowed(claims.UserID, creatorUser.ID)
 	response.NoContent(w)
 }
 
@@ -306,4 +314,36 @@ func (h *CreatorHandler) UploadCover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.OK(w, profile)
+}
+
+func (h *CreatorHandler) notifySubscribed(patronID, creatorID uuid.UUID) {
+	ctx := context.Background()
+	patron, err := h.userRepo.GetByID(ctx, patronID)
+	if err != nil {
+		return
+	}
+	title := fmt.Sprintf("%s оформил платную подписку на вас", patron.Username)
+	link := fmt.Sprintf("/%s", patron.Username)
+	event := hub.Event{Type: "new_subscriber", Title: title, Link: link}
+	h.notifHub.Send(creatorID, event)
+	n, err := h.notifRepo.Create(ctx, creatorID, "new_subscriber", title, nil, &link)
+	if err == nil {
+		event.ID = n.ID.String()
+	}
+}
+
+func (h *CreatorHandler) notifyFollowed(followerID, creatorID uuid.UUID) {
+	ctx := context.Background()
+	follower, err := h.userRepo.GetByID(ctx, followerID)
+	if err != nil {
+		return
+	}
+	title := fmt.Sprintf("%s подписался на вас", follower.Username)
+	link := fmt.Sprintf("/%s", follower.Username)
+	event := hub.Event{Type: "new_follower", Title: title, Link: link}
+	h.notifHub.Send(creatorID, event)
+	n, err := h.notifRepo.Create(ctx, creatorID, "new_follower", title, nil, &link)
+	if err == nil {
+		event.ID = n.ID.String()
+	}
 }
