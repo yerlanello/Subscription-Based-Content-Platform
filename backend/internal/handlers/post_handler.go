@@ -11,6 +11,7 @@ import (
 
 	"context"
 
+	"diploma/backend/internal/hub"
 	"diploma/backend/internal/middleware"
 	"diploma/backend/internal/models"
 	"diploma/backend/internal/recommendation"
@@ -27,12 +28,14 @@ type PostHandler struct {
 	commentRepo *repository.CommentRepo
 	userRepo    *repository.UserRepo
 	postRepo    *repository.PostRepo
+	notifRepo   *repository.NotificationRepo
+	notifHub    *hub.Hub
 	storage     *storage.MinioStorage
 	recSvc      *recommendation.Service // nil if rec system is unavailable
 }
 
-func NewPostHandler(postSvc *service.PostService, commentRepo *repository.CommentRepo, userRepo *repository.UserRepo, postRepo *repository.PostRepo, storage *storage.MinioStorage, recSvc *recommendation.Service) *PostHandler {
-	return &PostHandler{postSvc: postSvc, commentRepo: commentRepo, userRepo: userRepo, postRepo: postRepo, storage: storage, recSvc: recSvc}
+func NewPostHandler(postSvc *service.PostService, commentRepo *repository.CommentRepo, userRepo *repository.UserRepo, postRepo *repository.PostRepo, notifRepo *repository.NotificationRepo, notifHub *hub.Hub, storage *storage.MinioStorage, recSvc *recommendation.Service) *PostHandler {
+	return &PostHandler{postSvc: postSvc, commentRepo: commentRepo, userRepo: userRepo, postRepo: postRepo, notifRepo: notifRepo, notifHub: notifHub, storage: storage, recSvc: recSvc}
 }
 
 func (h *PostHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -350,7 +353,32 @@ func (h *PostHandler) CreateComment(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	go h.notifyNewComment(postID, claims.UserID, input.Content)
 	response.Created(w, comment)
+}
+
+func (h *PostHandler) notifyNewComment(postID, commenterID uuid.UUID, commentText string) {
+	ctx := context.Background()
+	post, err := h.postRepo.GetByID(ctx, postID)
+	if err != nil || post.CreatorID == commenterID {
+		return
+	}
+	commenter, err := h.userRepo.GetByID(ctx, commenterID)
+	if err != nil {
+		return
+	}
+	title := fmt.Sprintf("%s прокомментировал ваш пост", commenter.Username)
+	link := fmt.Sprintf("/posts/%s", postID)
+	body := commentText
+	if len(body) > 100 {
+		body = body[:100] + "..."
+	}
+	event := hub.Event{Type: "new_comment", Title: title, Body: body, Link: link}
+	h.notifHub.Send(post.CreatorID, event)
+	n, err := h.notifRepo.Create(ctx, post.CreatorID, "new_comment", title, &body, &link)
+	if err == nil {
+		event.ID = n.ID.String()
+	}
 }
 
 func (h *PostHandler) DeleteComment(w http.ResponseWriter, r *http.Request) {

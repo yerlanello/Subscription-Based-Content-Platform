@@ -118,10 +118,10 @@ func main() {
 	// Handlers
 	authH := handlers.NewAuthHandler(authSvc)
 	userH := handlers.NewUserHandler(userRepo, minioStorage)
-	creatorH := handlers.NewCreatorHandler(creatorRepo, userRepo, subRepo, followRepo, minioStorage)
-	postH := handlers.NewPostHandler(postSvc, commentRepo, userRepo, postRepo, minioStorage, recSvc)
+	creatorH := handlers.NewCreatorHandler(creatorRepo, userRepo, subRepo, followRepo, notifRepo, notifHub, minioStorage)
+	postH := handlers.NewPostHandler(postSvc, commentRepo, userRepo, postRepo, notifRepo, notifHub, minioStorage, recSvc)
 	notifH := handlers.NewNotificationHandler(notifRepo, notifHub)
-	stripeH := handlers.NewStripeHandler(subRepo, creatorRepo, userRepo, donationRepo)
+	stripeH := handlers.NewStripeHandler(subRepo, creatorRepo, userRepo, donationRepo, notifRepo, notifHub)
 	billingH := handlers.NewBillingHandler(subRepo, donationRepo)
 	streamH := handlers.NewStreamHandler(sRepo, notifRepo, notifHub)
 
