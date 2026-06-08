@@ -32,6 +32,9 @@ export const kk: Translations = {
   },
   following: {
     title: "Менің жазылымдарым",
+    paidSection: "Ақылы жазылымдар",
+    followSection: "Авторларды бақылау",
+    emptyPaid: "Ақылы жазылымдарыңыз жоқ",
     empty: "Сіз әлі ешбір авторды бақыламайсыз",
     findAuthors: "Авторларды табу",
   },

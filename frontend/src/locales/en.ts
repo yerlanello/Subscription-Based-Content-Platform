@@ -32,6 +32,9 @@ export const en: Translations = {
   },
   following: {
     title: "My Subscriptions",
+    paidSection: "Paid subscriptions",
+    followSection: "Following",
+    emptyPaid: "You have no paid subscriptions",
     empty: "You are not following any creators yet",
     findAuthors: "Find creators",
   },
