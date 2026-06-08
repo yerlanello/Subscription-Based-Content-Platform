@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import '../l10n/app_localizations.dart';
 import '../models/notification.dart';
 import '../services/notifications_service.dart';
+import '../services/posts_service.dart';
+import 'creator_profile_page.dart';
+import 'post_detail_page.dart';
+import 'stream_view_page.dart';
 
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({super.key});
@@ -19,6 +23,18 @@ class _NotificationsPageState extends State<NotificationsPage> {
   void initState() {
     super.initState();
     _load();
+    // Reload when a new notification arrives over SSE while this page is open.
+    NotificationsService.revision.addListener(_onRevision);
+  }
+
+  @override
+  void dispose() {
+    NotificationsService.revision.removeListener(_onRevision);
+    super.dispose();
+  }
+
+  void _onRevision() {
+    if (mounted) _load();
   }
 
   Future<void> _load() async {
@@ -40,19 +56,63 @@ class _NotificationsPageState extends State<NotificationsPage> {
     } catch (_) {}
   }
 
-  Future<void> _markRead(AppNotification n) async {
-    if (n.isRead) return;
-    try {
-      await NotificationsService.markRead(n.id);
-      await _load();
-    } catch (_) {}
-  }
-
   Future<void> _delete(AppNotification n) async {
     try {
       await NotificationsService.delete(n.id);
       if (mounted) setState(() => _notifications?.remove(n));
     } catch (_) {}
+  }
+
+  Future<void> _onTap(AppNotification n) async {
+    if (!n.isRead) {
+      NotificationsService.markRead(n.id).catchError((_) {});
+    }
+    await _openLink(n.link);
+    if (mounted) _load(); // reflect read state / pick up anything new
+  }
+
+  // Maps a backend link (/streams/{id}, /posts/{id}, /{username}) to a screen.
+  Future<void> _openLink(String? link) async {
+    if (link == null || link.isEmpty) return;
+    final segs = Uri.tryParse(link)?.pathSegments ?? const [];
+    if (segs.isEmpty) return;
+
+    final navigator = Navigator.of(context); // capture before any await
+
+    Widget? page;
+    if (segs[0] == 'streams' && segs.length >= 2) {
+      page = StreamViewPage(streamId: segs[1]);
+    } else if (segs[0] == 'posts' && segs.length >= 2) {
+      try {
+        final post = await PostsService.getById(segs[1]);
+        page = PostDetailPage(post: post);
+      } catch (_) {
+        return; // post gone — silently ignore
+      }
+    } else if (segs.length == 1) {
+      page = CreatorProfilePage(username: segs[0]);
+    }
+
+    if (page != null) {
+      await navigator.push(MaterialPageRoute(builder: (_) => page!));
+    }
+  }
+
+  IconData _iconFor(String type) {
+    switch (type) {
+      case 'new_comment':
+        return Icons.mode_comment_outlined;
+      case 'new_subscriber':
+        return Icons.person_add_alt_1_outlined;
+      case 'new_follower':
+        return Icons.favorite_outline;
+      case 'donation':
+        return Icons.volunteer_activism_outlined;
+      case 'stream_live':
+        return Icons.sensors;
+      default:
+        return Icons.notifications_outlined;
+    }
   }
 
   @override
@@ -113,6 +173,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
             separatorBuilder: (context, i) => const Divider(height: 1),
             itemBuilder: (context, i) {
               final n = _notifications![i];
+              final hasBody = n.body != null && n.body!.isNotEmpty;
               return Dismissible(
                 key: Key(n.id),
                 direction: DismissDirection.endToStart,
@@ -124,17 +185,18 @@ class _NotificationsPageState extends State<NotificationsPage> {
                 ),
                 onDismissed: (_) => _delete(n),
                 child: ListTile(
-                  onTap: () => _markRead(n),
+                  onTap: () => _onTap(n),
                   leading: Icon(
-                    Icons.notifications,
+                    _iconFor(n.type),
                     color: n.isRead ? colorScheme.outline : colorScheme.primary,
                   ),
                   title: Text(
-                    n.message,
+                    n.title,
                     style: TextStyle(
                       fontWeight: n.isRead ? FontWeight.normal : FontWeight.bold,
                     ),
                   ),
+                  subtitle: hasBody ? Text(n.body!) : null,
                   trailing: n.isRead
                       ? null
                       : Container(

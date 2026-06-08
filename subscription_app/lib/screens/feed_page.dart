@@ -4,7 +4,7 @@ import '../models/post.dart';
 import '../services/app_settings_service.dart';
 import '../services/posts_service.dart';
 import '../widgets/post_card.dart';
-import 'notifications_page.dart';
+import '../widgets/notification_bell.dart';
 
 class FeedPage extends StatefulWidget {
   const FeedPage({super.key});
@@ -93,13 +93,7 @@ class _FeedPageState extends State<FeedPage> {
         title: Text(L10n.t('feed')),
         centerTitle: false,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined),
-            tooltip: L10n.t('notifications'),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const NotificationsPage()),
-            ),
-          ),
+          const NotificationBell(),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _load,

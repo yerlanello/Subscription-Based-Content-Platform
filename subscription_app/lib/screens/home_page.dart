@@ -5,6 +5,7 @@ import '../l10n/app_localizations.dart';
 import '../models/creator.dart';
 import '../services/app_settings_service.dart';
 import '../services/creators_service.dart';
+import '../widgets/notification_bell.dart';
 import 'creator_profile_page.dart';
 
 const _limit = 50;
@@ -106,7 +107,11 @@ class _HomePageState extends State<HomePage> {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Xabarla'), centerTitle: false),
+      appBar: AppBar(
+        title: const Text('Xabarla'),
+        centerTitle: false,
+        actions: const [NotificationBell()],
+      ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

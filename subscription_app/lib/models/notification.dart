@@ -1,14 +1,18 @@
 class AppNotification {
   final String id;
   final String type;
-  final String message;
+  final String title;
+  final String? body;
+  final String? link;
   final bool isRead;
   final String createdAt;
 
   const AppNotification({
     required this.id,
     required this.type,
-    required this.message,
+    required this.title,
+    this.body,
+    this.link,
     required this.isRead,
     required this.createdAt,
   });
@@ -17,7 +21,10 @@ class AppNotification {
       AppNotification(
         id: json['id'] as String,
         type: json['type'] as String? ?? 'info',
-        message: json['message'] as String? ?? '',
+        // Backend sends `title` (+ optional `body`/`link`), not `message`.
+        title: json['title'] as String? ?? '',
+        body: json['body'] as String?,
+        link: json['link'] as String?,
         isRead: json['is_read'] as bool? ?? false,
         createdAt: json['created_at'] as String? ?? '',
       );

@@ -761,11 +761,17 @@ class _CommentInput extends StatelessWidget {
         color: colorScheme.surface,
         border: Border(top: BorderSide(color: colorScheme.outlineVariant)),
       ),
+      // viewInsets.bottom = keyboard height; padding.bottom = system nav-bar
+      // inset (non-zero on phones with on-screen buttons). Flutter zeroes
+      // padding.bottom while the keyboard is up, so summing is correct in both
+      // states and keeps the input clear of the navigation bar.
       padding: EdgeInsets.only(
         left: 12,
         right: 8,
         top: 8,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 8,
+        bottom: MediaQuery.of(context).viewInsets.bottom +
+            MediaQuery.of(context).padding.bottom +
+            8,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,

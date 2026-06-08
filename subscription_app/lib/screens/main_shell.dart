@@ -9,7 +9,6 @@ import 'creator_dashboard_page.dart';
 import 'account_page.dart';
 import 'settings_page.dart';
 import 'new_post_page.dart';
-import 'notifications_page.dart';
 import '../services/notifications_service.dart';
 
 class MainShell extends StatefulWidget {
@@ -29,12 +28,15 @@ class _MainShellState extends State<MainShell> {
     _loadRole();
     AppSettingsService.locale.addListener(_onLocaleChange);
     AuthService.roleNotifier.addListener(_onRoleChange);
+    // Open the realtime notifications stream for the authenticated session.
+    NotificationsService.connect();
   }
 
   @override
   void dispose() {
     AppSettingsService.locale.removeListener(_onLocaleChange);
     AuthService.roleNotifier.removeListener(_onRoleChange);
+    NotificationsService.disconnect();
     super.dispose();
   }
 
@@ -178,44 +180,3 @@ class _MainShellState extends State<MainShell> {
   }
 }
 
-class NotificationBell extends StatefulWidget {
-  const NotificationBell({super.key});
-
-  @override
-  State<NotificationBell> createState() => _NotificationBellState();
-}
-
-class _NotificationBellState extends State<NotificationBell> {
-  int _unread = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadCount();
-  }
-
-  Future<void> _loadCount() async {
-    try {
-      final count = await NotificationsService.unreadCount();
-      if (mounted) setState(() => _unread = count);
-    } catch (_) {}
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return IconButton(
-      icon: Badge(
-        isLabelVisible: _unread > 0,
-        label: Text('$_unread'),
-        child: const Icon(Icons.notifications_outlined),
-      ),
-      tooltip: 'Notifications',
-      onPressed: () async {
-        await Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const NotificationsPage()),
-        );
-        _loadCount();
-      },
-    );
-  }
-}

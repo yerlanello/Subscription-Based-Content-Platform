@@ -6,6 +6,7 @@ import { formatDistanceToNow } from "date-fns";
 import { ru as ruLocale, enUS, kk as kkLocale } from "date-fns/locale";
 import { Heart, Lock, MessageCircle } from "lucide-react";
 import { RenderContent } from "./RenderContent";
+import { extractYouTubeId } from "@/lib/youtube";
 import { useT } from "@/hooks/useT";
 import { useLocaleStore } from "@/store/localeStore";
 
@@ -86,8 +87,22 @@ export function PostCard({ post }: Props) {
                 // eslint-disable-next-line @next/next/no-img-element
                 <img key={a.id} src={a.url} alt="" className="max-h-64 w-full rounded-lg object-cover" />
               );
-            if (mime.startsWith("video/"))
+            if (mime.startsWith("video/")) {
+              const ytId = extractYouTubeId(a.url);
+              if (ytId)
+                return (
+                  <div key={a.id} className="aspect-video w-full overflow-hidden rounded-lg">
+                    <iframe
+                      src={`https://www.youtube.com/embed/${ytId}`}
+                      title="YouTube video"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                      className="h-full w-full"
+                    />
+                  </div>
+                );
               return <video key={a.id} src={a.url} controls className="w-full rounded-lg max-h-64" />;
+            }
             if (mime.startsWith("audio/"))
               return <audio key={a.id} src={a.url} controls className="w-full" />;
             return null;

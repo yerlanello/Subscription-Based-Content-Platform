@@ -8,6 +8,7 @@ import { formatDistanceToNow } from "date-fns";
 import { ru as ruLocale, enUS, kk as kkLocale } from "date-fns/locale";
 import { Lock, MessageCircle, Trash2, ChevronDown, ChevronUp, CornerDownRight, Languages } from "lucide-react";
 import { RenderContent } from "@/components/post/RenderContent";
+import { extractYouTubeId } from "@/lib/youtube";
 import { LikeButton } from "@/components/post/LikeButton";
 import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
@@ -361,8 +362,22 @@ export default function PostPage({ params }: { params: { id: string } }) {
               const mime = a.mime_type ?? "";
               if (mime.startsWith("image/"))
                 return <img key={a.id} src={a.url} alt="" className="rounded-lg max-h-[500px] w-full object-contain" />; // eslint-disable-line @next/next/no-img-element
-              if (mime.startsWith("video/"))
+              if (mime.startsWith("video/")) {
+                const ytId = extractYouTubeId(a.url);
+                if (ytId)
+                  return (
+                    <div key={a.id} className="aspect-video w-full overflow-hidden rounded-lg">
+                      <iframe
+                        src={`https://www.youtube.com/embed/${ytId}`}
+                        title="YouTube video"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                        className="h-full w-full"
+                      />
+                    </div>
+                  );
                 return <video key={a.id} src={a.url} controls className="w-full rounded-lg max-h-[500px]" />;
+              }
               if (mime.startsWith("audio/"))
                 return <audio key={a.id} src={a.url} controls className="w-full" />;
               return null;
