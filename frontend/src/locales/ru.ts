@@ -85,7 +85,7 @@ export const ru = {
     subscribeFree: "Подписаться бесплатно",
     unsubscribe: "Отписаться",
     follow: "Следить",
-    unfollow: "Отписан от уведомлений",
+    unfollow: "Отписаться от уведомлений",
     donate: "Задонатить",
     subscribers: "подписчиков",
     followers: "читателей",
