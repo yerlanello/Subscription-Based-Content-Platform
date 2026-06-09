@@ -3,6 +3,7 @@ export const ru = {
     authors: "Авторы",
     feed: "Лента",
     subscriptions: "Подписки",
+    streams: "Эфиры",
     dashboard: "Кабинет",
     paymentHistory: "История оплат",
     profile: "Мой профиль",

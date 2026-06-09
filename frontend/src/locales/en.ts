@@ -5,6 +5,7 @@ export const en: Translations = {
     authors: "Authors",
     feed: "Feed",
     subscriptions: "Subscriptions",
+    streams: "Streams",
     dashboard: "Dashboard",
     paymentHistory: "Payment History",
     profile: "My Profile",

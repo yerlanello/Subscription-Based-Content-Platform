@@ -5,6 +5,7 @@ export const kk: Translations = {
     authors: "Авторлар",
     feed: "Таспа",
     subscriptions: "Жазылымдар",
+    streams: "Эфирлер",
     dashboard: "Кабинет",
     paymentHistory: "Төлем тарихы",
     profile: "Менің профилім",

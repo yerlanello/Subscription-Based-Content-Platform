@@ -135,7 +135,7 @@ export function Navbar() {
               </Link>
               <Link href="/streams" className="btn-ghost hidden sm:flex">
                 <Radio size={16} />
-                Эфиры
+                {t.nav.streams}
               </Link>
               {(user.role === "creator" || user.role === "both") && (
                 <Link href="/dashboard" className="btn-ghost hidden sm:flex">
